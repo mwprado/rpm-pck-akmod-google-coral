@@ -1,0 +1,7 @@
+# Google Coral Gasket/Apex (PCIe/M.2)
+SUBSYSTEM=="gasket", KERNEL=="gasket*", GROUP="coral", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="apex", KERNEL=="apex*", GROUP="coral", MODE="0660", TAG+="uaccess"
+
+# Google Coral USB
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1a6e", ATTRS{idProduct}=="089a", GROUP="coral", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="9302", GROUP="coral", MODE="0660", TAG+="uaccess"
