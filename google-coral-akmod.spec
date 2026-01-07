@@ -4,7 +4,7 @@
 %global shortcommit %(c=%{commit}; echo ${c:0:7})
 %global snapshotdate 20260105
 
-Name:           google-coral-akmod
+Name:           akmod-google-coral
 Version:        1.0
 Release:        1.%{snapshotdate}git%{shortcommit}%{?dist}
 Summary:        Akmod package for Google Coral Edge TPU (Gasket & Apex)
@@ -22,7 +22,7 @@ BuildRequires:  kernel-devel
 BuildRequires:  kmodtool
 BuildRequires:  systemd-devel
 Requires:       akmods
-Requires:       (kmod-google-coral if kernel)
+#Requires:       (kmod-google-coral if kernel)
 Requires(pre):  shadow-utils
 
 %{!?kernels: %{?kmodtool_kernels}}
@@ -33,6 +33,7 @@ via akmod, garantindo suporte persistente em atualizacoes de kernel no Fedora.
 
 %package -n kmod-google-coral
 Summary:        Modulo de kernel para Google Coral
+Provides:       kmod-google-coral = %{version}-%{release}
 Provides:       google-coral-kmod = %{version}-%{release}
 
 %description -n kmod-google-coral
