@@ -6,7 +6,7 @@
 
 Name:           akmod-google-coral
 Version:        1.0
-Release:        1.%{snapshotdate}git%{shortcommit}%{?dist}
+Release:        2.%{snapshotdate}git%{shortcommit}%{?dist}
 Summary:        Akmod package for Google Coral Edge TPU (Gasket & Apex)
 License:        GPLv2
 URL:            https://github.com/google/%{repo_name}
