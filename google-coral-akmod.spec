@@ -1,6 +1,6 @@
 %global debug_package %{nil}
 %global repo_name gasket-driver
-%global commit      16a8b13c19e5d429813589b27568194f6c44247d
+%global commit      5815ee3908a46a415aac616ac7b9aedcb98a504c
 %global shortcommit %(c=%{commit}; echo ${c:0:7})
 %global snapshotdate 20260105
 %global akmod_name google-coral
