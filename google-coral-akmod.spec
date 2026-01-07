@@ -1,20 +1,20 @@
 %global debug_package %{nil}
 %global repo_name gasket-driver
-%global commit      5815ee3908a46a415aac616ac7b9aedcb98a504c
+%global commit      16a8b13c19e5d429813589b27568194f6c44247d
 %global shortcommit %(c=%{commit}; echo ${c:0:7})
 %global snapshotdate 20260105
+%global akmod_name google-coral
 
-Name:           akmod-google-coral
+Name:           google-coral-akmod
 Version:        1.0
-Release:        2.%{snapshotdate}git%{shortcommit}%{?dist}
+Release:        3.%{snapshotdate}git%{shortcommit}%{?dist}
 Summary:        Akmod package for Google Coral Edge TPU (Gasket & Apex)
 License:        GPLv2
 URL:            https://github.com/google/%{repo_name}
 
-# Source0: Código do Google
 Source0:        %{url}/archive/%{commit}/%{repo_name}-%{shortcommit}.tar.gz
-# Source1: Seu arquivo local no GitHub
 Source1:        99-google-coral.rules
+Source2:        google-coral.conf
 
 BuildRequires:  make
 BuildRequires:  gcc
@@ -22,43 +22,35 @@ BuildRequires:  kernel-devel
 BuildRequires:  kmodtool
 BuildRequires:  systemd-devel
 Requires:       akmods
-#Requires:       (kmod-google-coral if kernel)
+Requires:       kmodtool
 Requires(pre):  shadow-utils
 
-%{!?kernels: %{?kmodtool_kernels}}
+Provides:       %{akmod_name}-kmod-common = %{version}
+Requires:       %{akmod_name}-kmod-common = %{version}
 
 %description
-Este pacote fornece o driver Gasket/Apex para hardware Google Coral 
-via akmod, garantindo suporte persistente em atualizacoes de kernel no Fedora.
-
-%package -n kmod-google-coral
-Summary:        Modulo de kernel para Google Coral
-Provides:       kmod-google-coral = %{version}-%{release}
-Provides:       google-coral-kmod = %{version}-%{release}
-
-%description -n kmod-google-coral
-Modulo de kernel compilado para o Google Coral Edge TPU.
+Este pacote fornece o código fonte para o akmod gerar os drivers gasket e apex 
+para o Google Coral. Configurações de udev e carregamento de módulos inclusas.
 
 %prep
 %setup -q -n %{repo_name}-%{commit}
 
 %build
-# Preparado para akmod
+# Preparado para o runtime do akmod
 
 %install
 # 1. Instalar fontes para o akmod
-dest_dir=%{buildroot}%{_usrsrc}/akmods/google-coral-%{version}-%{release}
+dest_dir=%{buildroot}%{_usrsrc}/akmods/%{akmod_name}-%{version}-%{release}
 mkdir -p $dest_dir
 cp -r src/* $dest_dir/
-#cp Makefile $dest_dir/
 
 # 2. Instalar regras de udev (Source1)
 mkdir -p %{buildroot}%{_udevrulesdir}
 install -p -m 0644 %{SOURCE1} %{buildroot}%{_udevrulesdir}/
 
-# 3. Configuração do akmod
-mkdir -p %{buildroot}%{_sysconfdir}/akmods/
-echo 'MODULE_NAME="gasket apex"' > %{buildroot}%{_sysconfdir}/akmods/google-coral.conf
+# 3. Instalar configuração de carregamento de módulos (Source2)
+mkdir -p %{buildroot}%{_sysconfdir}/modules-load.d/
+install -p -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/modules-load.d/
 
 %pre
 getent group coral >/dev/null || groupadd -r coral
@@ -66,13 +58,15 @@ exit 0
 
 %post
 /usr/bin/udevadm control --reload-rules && /usr/bin/udevadm trigger || :
+%{_sbindir}/akmods --force --akmod %{akmod_name} &>/dev/null || :
 
 %files
 %license LICENSE
-%{_usrsrc}/akmods/google-coral-%{version}-%{release}
+%{_usrsrc}/akmods/%{akmod_name}-%{version}-%{release}
 %{_udevrulesdir}/99-google-coral.rules
-%{_sysconfdir}/akmods/google-coral.conf
+%{_sysconfdir}/modules-load.d/google-coral.conf
 
 %changelog
-* Mon Jan 05 2026 O Teu Nome <teu@email.com> - 1.0-1.20260105git16a8b13
-- Versao inicial com akmod e regras de udev integradas.
+* Tue Jan 06 2026 mwprado <mwprado@github> - 1.0-3.20260105git16a8b13
+- Removida cópia redundante do Makefile.
+- Movida configuração de módulos para arquivo externo (Source2).
