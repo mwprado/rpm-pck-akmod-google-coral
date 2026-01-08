@@ -8,7 +8,7 @@
 # Nome padronizado conforme diretrizes do Fedora Akmod
 Name:           akmod-%{akmod_name}
 Version:        1.0
-Release:        12.%{snapshotdate}git%{shortcommit}%{?dist}
+Release:        13.%{snapshotdate}git%{shortcommit}%{?dist}
 Summary:        Akmod package for Google Coral Edge TPU (Gasket & Apex)
 License:        GPLv2
 URL:            https://github.com/google/%{repo_name}
@@ -16,7 +16,7 @@ URL:            https://github.com/google/%{repo_name}
 Source0:        %{url}/archive/%{commit}/%{repo_name}-%{shortcommit}.tar.gz
 
 # URLs Raw do seu GitHub para centralização
-%global raw_url https://raw.githubusercontent.com/mwprado/rpm-pck-google-coral-akmod/main
+%global raw_url https://raw.githubusercontent.com/mwprado/rpm-pck-akmod-google-coral/main
 Source1:        %{raw_url}/99-google-coral.rules
 Source2:        %{raw_url}/google-coral.conf
 Source3:        %{raw_url}/fix-for-no_llseek.patch
