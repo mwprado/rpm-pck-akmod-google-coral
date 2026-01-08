@@ -7,16 +7,14 @@
 
 Name:           google-coral-akmod
 Version:        1.0
-Release:        7.%{snapshotdate}git%{shortcommit}%{?dist}
+Release:        8.%{snapshotdate}git%{shortcommit}%{?dist}
 Summary:        Akmod package for Google Coral Edge TPU (Gasket & Apex)
 License:        GPLv2
 URL:            https://github.com/google/%{repo_name}
 
-# Source0: Código fonte original do Google [cite: 1]
 Source0:        %{url}/archive/%{commit}/%{repo_name}-%{shortcommit}.tar.gz
 
-# Referências diretas para os arquivos no seu GitHub (Raw) 
-# Isso evita o erro de "No such file or directory" ao tentar extrair tarballs aninhados
+# Referências Raw do seu GitHub para garantir consistência
 %global raw_url https://raw.githubusercontent.com/mwprado/rpm-pck-google-coral-akmod/main
 Source1:        %{raw_url}/99-google-coral.rules
 Source2:        %{raw_url}/google-coral.conf
@@ -36,27 +34,28 @@ Provides:       %{akmod_name}-kmod-common = %{version}
 Requires:       %{akmod_name}-kmod-common = %{version}
 
 %description
-Este pacote fornece o código fonte para o akmod gerar os drivers gasket e apex 
-para o Google Coral[cite: 3]. Patches e configs aplicados via repositório mwprado.
+Este pacote fornece o código fonte (já patcheado para kernels modernos) para 
+o akmod gerar os drivers gasket e apex para o Google Coral.
 
 %prep
-# Extrai apenas o código do Google 
+# 1. Extrai o código do Google 
 %setup -q -n %{repo_name}-%{commit}
 
-# Aplica os patches usando as referências de Source diretas do RPM 
+# 2. Aplica os patches DIRETAMENTE no código antes do empacotamento 
+# Isso garante que os arquivos em 'src/' que serão copiados no %install já estejam corrigidos
 patch -p1 < %{SOURCE3}
 patch -p1 < %{SOURCE4}
 
 %build
-# Preparado para o runtime do akmod
+# Nada a fazer aqui
 
 %install
-# 1. Instalar fontes para o akmod 
+# 1. Instalar fontes para o akmod (Agora contendo os arquivos já alterados pelos patches)
 dest_dir=%{buildroot}%{_usrsrc}/akmods/%{akmod_name}-%{version}-%{release}
 mkdir -p $dest_dir
 cp -r src/* $dest_dir/
 
-# 2. Instalar arquivos de configuração usando as macros %{SOURCE} 
+# 2. Instalar udev e configs de módulos [cite: 2]
 mkdir -p %{buildroot}%{_udevrulesdir}
 install -p -m 0644 %{SOURCE1} %{buildroot}%{_udevrulesdir}/99-google-coral.rules
 
@@ -68,8 +67,8 @@ getent group coral >/dev/null || groupadd -r coral [cite: 5]
 exit 0
 
 %post
-/usr/bin/udevadm control --reload-rules && /usr/bin/udevadm trigger || : [cite: 6]
-%{_sbindir}/akmods --force --akmod %{akmod_name} &>/dev/null || : [cite: 6]
+/usr/bin/udevadm control --reload-rules && /usr/bin/udevadm trigger || :
+%{_sbindir}/akmods --force --akmod %{akmod_name} &>/dev/null || : 
 
 %files
 %license LICENSE
@@ -78,5 +77,5 @@ exit 0
 %{_sysconfdir}/modules-load.d/google-coral.conf
 
 %changelog
-* Wed Jan 07 2026 mwprado <mwprado@github> - 1.0-7
-- Correção do erro de diretório no %prep usando caminhos Raw do GitHub.
+* Wed Jan 07 2026 mwprado <mwprado@github> - 1.0-8
+- Garantido que o código fonte seja patcheado antes da cópia para o diretório akmod.
