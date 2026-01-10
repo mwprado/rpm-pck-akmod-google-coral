@@ -59,4 +59,40 @@ patch -p1 < %{SOURCE4}
 mkdir -p %{buildroot}%{akmod_inst_dir}
 
 # Copia apenas o conteúdo de 'src' para a raiz da pasta do akmod
-cp
+cp -r src/* %{buildroot}%{akmod_inst_dir}/
+
+# Cria o arquivo de mapeamento .nm necessário para o Silverblue
+mkdir -p %{buildroot}%{_sysconfdir}/akmods
+echo "%{akmod_name}" > %{buildroot}%{_sysconfdir}/akmods/%{akmod_name}.nm
+
+# Instalação de arquivos de suporte
+mkdir -p %{buildroot}%{_udevrulesdir}
+install -p -m 0644 %{SOURCE1} %{buildroot}%{_udevrulesdir}/99-google-coral.rules
+
+mkdir -p %{buildroot}%{_sysconfdir}/modules-load.d/
+install -p -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/modules-load.d/google-coral.conf
+
+mkdir -p %{buildroot}%{_sysusersdir}
+install -p -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
+
+%pre
+# Garante a criação do grupo 'coral' antes da instalação
+%sysusers_create_package %{akmod_name} %{SOURCE5}
+
+%post
+# Tenta disparar o build. Se falhar por falta de kernel-devel, ocorrerá no próximo boot.
+%{_sbindir}/akmods --force --akmod %{akmod_name} &>/dev/null || :
+/usr/bin/udevadm control --reload-rules && /usr/bin/udevadm trigger || :
+
+%files
+%license LICENSE
+%{akmod_inst_dir}
+%{_sysconfdir}/akmods/%{akmod_name}.nm
+%{_udevrulesdir}/99-google-coral.rules
+%{_sysconfdir}/modules-load.d/google-coral.conf
+%{_sysusersdir}/google-coral.conf
+
+%changelog
+* Sat Jan 10 2026 mwprado <mwprado@github> - 1.0-17
+- Removido systemd-devel dos BuildRequires para evitar falhas de compilação no Silverblue.
+- Mantida a estrutura de pasta limpa em /usr/src/akmods.
