@@ -10,7 +10,7 @@
 
 Name:           akmod-google-coral
 Version:        1.0
-Release:        17.%{snapshotdate}git%{shortcommit}%{?dist}
+Release:        18.%{snapshotdate}git%{shortcommit}%{?dist}
 Summary:        Akmod package for Google Coral Edge TPU
 License:        GPLv2
 URL:            https://github.com/google/%{repo_name}
@@ -28,6 +28,7 @@ Source5:        %{raw_url}/google-coral-group.conf
 BuildRequires:  make
 BuildRequires:  gcc
 BuildRequires:  kernel-devel
+BuildRequires:  systemd-devel
 BuildRequires:  kmodtool
 BuildRequires:  systemd-rpm-macros
 # Removido systemd-devel para evitar erros de dependência no cliente
