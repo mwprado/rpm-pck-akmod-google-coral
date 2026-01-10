@@ -3,12 +3,9 @@
 %endif
 %global debug_package %{nil}
 
-# Definições de nome iguais ao da NVIDIA
-%global kmod_name google-coral
-
 Name:           google-coral-kmod
 Version:        1.0
-Release:        26.20260105git5815ee3%{?dist}
+Release:        27.20260105git5815ee3%{?dist}
 Summary:        Google Coral Edge TPU kernel module
 License:        GPLv2
 URL:            https://github.com/google/gasket-driver
@@ -20,15 +17,15 @@ Source3:        fix-for-no_llseek.patch
 Source4:        fix-for-module-import-ns.patch
 Source5:        google-coral-group.conf
 
-# O pulo do gato da NVIDIA: BuildRequires dinâmico
-%global AkmodsBuildRequires %{_bindir}/kmodtool
-BuildRequires:  %{AkmodsBuildRequires}
+# BuildRequires idênticos ao nvidia-kmod.spec
+BuildRequires:  %{_bindir}/kmodtool
 BuildRequires:  gcc, make, kernel-devel, elfutils-libelf-devel
 BuildRequires:  systemd-devel, systemd-rpm-macros
 
-# ESTA É A LINHA QUE DEU ERRO - Ajustada para o padrão exato da NVIDIA
-# Ela gera os subpacotes akmod-google-coral-kmod e kmod-google-coral-kmod
-%{!?kernels:%{?buildforkernels: %%{expand:%%( %{_bindir}/kmodtool --target %{_target_cpu} --repo %{name} --akmod %{name} %{?buildforkernels:--%{buildforkernels}} %{?kernels:--kmp %{?kernels}} 2>/dev/null )}}}
+# O SEGREDO DO NVIDIA-KMOD: 
+# Usar a chamada do kmodtool SEM o %{expand:...} que está quebrando no rpkg, 
+# mas mantendo a lógica de checagem de kernels.
+%{!?kernels:%{?buildforkernels: %(%{_bindir}/kmodtool --target %{_target_cpu} --repo %{name} --akmod %{name} %{?buildforkernels:--%{buildforkernels}} 2>/dev/null)}}
 
 %description
 Este pacote segue o padrão exato do driver NVIDIA (RPM Fusion).
@@ -39,12 +36,11 @@ Fornece suporte para o hardware Google Coral Edge TPU.
 %patch -P 3 -p1
 %patch -P 4 -p1
 
-# Prepara a estrutura de build como a NVIDIA faz
+# Prepara a estrutura como a NVIDIA faz
 mkdir -p _kmod_build_%{_target_cpu}
 cp -r src/* _kmod_build_%{_target_cpu}/
 
 %build
-# Build para os kernels detectados
 for kernel_version in %{?kernel_versions} ; do
     make -C /lib/modules/${kernel_version%%___*}/build M=$(pwd)/_kmod_build_${kernel_version##*___} modules
 done
@@ -70,6 +66,6 @@ install -D -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 %{_sysusersdir}/google-coral.conf
 
 %changelog
-* Sat Jan 10 2026 mwprado <mwprado@github> - 1.0-26
-- Correção da macro kmodtool para evitar erro de parse no Copr/rpkg.
-- Sincronização estrita com a lógica de expansão do nvidia-kmod.spec.
+* Sat Jan 10 2026 mwprado <mwprado@github> - 1.0-27
+- Ajuste na macro kmodtool para compatibilidade com rpkg/Copr.
+- Removido %expand desnecessário que causava Unknown Tag.
