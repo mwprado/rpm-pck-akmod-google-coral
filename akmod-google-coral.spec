@@ -3,14 +3,16 @@
 %global commit      5815ee3908a46a415aac616ac7b9aedcb98a504c
 %global shortcommit %(c=%{commit}; echo ${c:0:7})
 %global snapshotdate 20260105
-%global akmod_name google-coral
 
-# 1. Ativa a infraestrutura de akmods padrão Fedora/NVIDIA
+# 1. Definimos o nome do akmod com o sufixo kmod (Padrão NVIDIA)
+%global akmod_name google-coral-kmod
+%global src_dir_name google-coral
+
 %{?akmod_global}
 
 Name:           akmod-google-coral
 Version:        1.0
-Release:        20.%{snapshotdate}git%{shortcommit}%{?dist}
+Release:        21.%{snapshotdate}git%{shortcommit}%{?dist}
 Summary:        Akmod package for Google Coral Edge TPU
 License:        GPLv2
 URL:            https://github.com/google/%{repo_name}
@@ -27,16 +29,16 @@ Source5:        %{raw_url}/google-coral-group.conf
 BuildRequires:  make gcc kernel-devel kmodtool systemd-devel systemd-rpm-macros
 Requires:       akmods kmodtool
 
-# 2. PROVIDES PADRÃO NVIDIA: Isto é o que o comando 'akmods --akmod google-coral' procura
+# 2. Metadados de compatibilidade NVIDIA-style
 Provides:       akmod(%{akmod_name}) = %{version}-%{release}
+Provides:       %{src_dir_name}-kmod-common = %{version}
 
-# 3. MACRO MÁGICA: Gera dinamicamente os metadados de subpacotes kmod
 %{?kmodtool_prefix}
 %(kmodtool --target %{_target_cpu} --repo %{repo_name} --akmod %{akmod_name} %{?kernels:--kmp %{?kernels}} 2>/dev/null)
 
 %description
-This package provides the akmod-google-coral kernel module.
-It follows the Fedora akmod standard used by major drivers like NVIDIA.
+Este pacote segue o padrão akmod-nvidia. 
+Permite o uso do comando: akmods --akmod google-coral-kmod
 
 %prep
 %setup -q -n %{repo_name}-%{commit}
@@ -44,17 +46,18 @@ patch -p1 < %{SOURCE3}
 patch -p1 < %{SOURCE4}
 
 %build
-# O build é disparado pelo kmodtool/akmods
+# Build via akmods
 
 %install
-# 4. DIRETÓRIO DE FONTES: Deve ser idêntico ao akmod_name para evitar confusão
-%global akmod_inst_dir %{_usrsrc}/akmods/%{akmod_name}-%{version}-%{release}
+# 3. A pasta física mantém o nome simples para evitar caminhos redundantes
+%global akmod_inst_dir %{_usrsrc}/akmods/%{src_dir_name}-%{version}-%{release}
 mkdir -p %{buildroot}%{akmod_inst_dir}
 cp -r src/* %{buildroot}%{akmod_inst_dir}/
 
-# 5. ARQUIVO .NM: O "mapa" de busca do akmods
+# 4. O ARQUIVO .NM: O segredo do comando --akmod google-coral-kmod
+# O nome do arquivo é o que você digita, o conteúdo é o nome da pasta em /usr/src/akmods/
 mkdir -p %{buildroot}%{_sysconfdir}/akmods
-echo "%{akmod_name}" > %{buildroot}%{_sysconfdir}/akmods/%{akmod_name}.nm
+echo "%{src_dir_name}-%{version}-%{release}" > %{buildroot}%{_sysconfdir}/akmods/%{akmod_name}.nm
 
 # Arquivos de suporte
 mkdir -p %{buildroot}%{_udevrulesdir}
@@ -65,10 +68,10 @@ mkdir -p %{buildroot}%{_sysusersdir}
 install -p -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 
 %pre
-%sysusers_create_package %{akmod_name} %{SOURCE5}
+%sysusers_create_package %{src_dir_name} %{SOURCE5}
 
 %post
-# Gatilho de build automático
+# Agora o gatilho usa o nome com -kmod
 %{_sbindir}/akmods --force --akmod %{akmod_name} &>/dev/null || :
 /usr/bin/udevadm control --reload-rules && /usr/bin/udevadm trigger || :
 
@@ -81,6 +84,6 @@ install -p -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 %{_sysusersdir}/google-coral.conf
 
 %changelog
-* Sat Jan 10 2026 mwprado <mwprado@github> - 1.0-20
-- Sincronização total com o padrão de metadados NVIDIA/kmodtool.
-- Adição de Provides akmod() e macro de subpacotes.
+* Sat Jan 10 2026 mwprado <mwprado@github> - 1.0-21
+- Padronização completa com o sufixo -kmod (estilo NVIDIA).
+- Arquivo .nm configurado para mapear google-coral-kmod para a pasta de fontes.
