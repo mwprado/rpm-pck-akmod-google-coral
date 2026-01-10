@@ -5,12 +5,12 @@
 %global snapshotdate 20260105
 %global akmod_name google-coral
 
-# 1. Macro essencial para ativar a infraestrutura akmod
+# 1. Ativa a infraestrutura de akmods padrão Fedora/NVIDIA
 %{?akmod_global}
 
 Name:           akmod-google-coral
 Version:        1.0
-Release:        19.%{snapshotdate}git%{shortcommit}%{?dist}
+Release:        20.%{snapshotdate}git%{shortcommit}%{?dist}
 Summary:        Akmod package for Google Coral Edge TPU
 License:        GPLv2
 URL:            https://github.com/google/%{repo_name}
@@ -24,69 +24,42 @@ Source3:        %{raw_url}/fix-for-no_llseek.patch
 Source4:        %{raw_url}/fix-for-module-import-ns.patch
 Source5:        %{raw_url}/google-coral-group.conf
 
-# BuildRequires confirmados pela sua compilação manual bem-sucedida
 BuildRequires:  make gcc kernel-devel kmodtool systemd-devel systemd-rpm-macros
 Requires:       akmods kmodtool
 
-# 2. Conexão com o kmodtool para gerar metadados de automação
+# 2. PROVIDES PADRÃO NVIDIA: Isto é o que o comando 'akmods --akmod google-coral' procura
 Provides:       akmod(%{akmod_name}) = %{version}-%{release}
-Provides:       %{akmod_name}-kmod-common = %{version}
+
+# 3. MACRO MÁGICA: Gera dinamicamente os metadados de subpacotes kmod
 %{?kmodtool_prefix}
 %(kmodtool --target %{_target_cpu} --repo %{repo_name} --akmod %{akmod_name} %{?kernels:--kmp %{?kernels}} 2>/dev/null)
 
 %description
-Este pacote fornece o mecanismo akmod para o driver Google Coral (Gasket/Apex).
-A versão 19 inclui macros kmodtool para automação total no Fedora Silverblue.
+This package provides the akmod-google-coral kernel module.
+It follows the Fedora akmod standard used by major drivers like NVIDIA.
 
 %prep
 %setup -q -n %{repo_name}-%{commit}
-# Aplicação dos patches para compatibilidade com Kernel moderno
 patch -p1 < %{SOURCE3}
 patch -p1 < %{SOURCE4}
 
 %build
-# Processado pelo akmods no cliente
+# O build é disparado pelo kmodtool/akmods
 
 %install
-# Define o diretório exato esperado pelo utilitário akmods
+# 4. DIRETÓRIO DE FONTES: Deve ser idêntico ao akmod_name para evitar confusão
 %global akmod_inst_dir %{_usrsrc}/akmods/%{akmod_name}-%{version}-%{release}
 mkdir -p %{buildroot}%{akmod_inst_dir}
-
-# Copia o conteúdo de src para a raiz do diretório akmod
 cp -r src/* %{buildroot}%{akmod_inst_dir}/
 
-# Instala o arquivo de controle .nm (Vital para o comando 'akmods' no Silverblue)
+# 5. ARQUIVO .NM: O "mapa" de busca do akmods
 mkdir -p %{buildroot}%{_sysconfdir}/akmods
 echo "%{akmod_name}" > %{buildroot}%{_sysconfdir}/akmods/%{akmod_name}.nm
 
-# Arquivos de suporte do sistema
+# Arquivos de suporte
 mkdir -p %{buildroot}%{_udevrulesdir}
 install -p -m 0644 %{SOURCE1} %{buildroot}%{_udevrulesdir}/99-google-coral.rules
-
 mkdir -p %{buildroot}%{_sysconfdir}/modules-load.d/
 install -p -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/modules-load.d/google-coral.conf
-
 mkdir -p %{buildroot}%{_sysusersdir}
-install -p -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
-
-%pre
-%sysusers_create_package %{akmod_name} %{SOURCE5}
-
-%post
-# Tenta o build imediato. Se falhar, o .nm e o kmodtool garantem o build no boot.
-%{_sbindir}/akmods --force --akmod %{akmod_name} &>/dev/null || :
-/usr/bin/udevadm control --reload-rules && /usr/bin/udevadm trigger || :
-
-%files
-%license LICENSE
-%{akmod_inst_dir}
-%{_sysconfdir}/akmods/%{akmod_name}.nm
-%{_udevrulesdir}/99-google-coral.rules
-%{_sysconfdir}/modules-load.d/google-coral.conf
-%{_sysusersdir}/google-coral.conf
-
-%changelog
-* Sat Jan 10 2026 mwprado <mwprado@github> - 1.0-19
-- Inclusão da macro kmodtool para automação de subpacotes kmod.
-- Confirmada dependência systemd-devel para compilação local.
-- Estrutura de diretórios consolidada.
+install -p -m 0644 %{SOURCE5} %{buildroot}%{_
