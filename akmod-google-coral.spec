@@ -62,4 +62,25 @@ install -p -m 0644 %{SOURCE1} %{buildroot}%{_udevrulesdir}/99-google-coral.rules
 mkdir -p %{buildroot}%{_sysconfdir}/modules-load.d/
 install -p -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/modules-load.d/google-coral.conf
 mkdir -p %{buildroot}%{_sysusersdir}
-install -p -m 0644 %{SOURCE5} %{buildroot}%{_
+install -p -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
+
+%pre
+%sysusers_create_package %{akmod_name} %{SOURCE5}
+
+%post
+# Gatilho de build automático
+%{_sbindir}/akmods --force --akmod %{akmod_name} &>/dev/null || :
+/usr/bin/udevadm control --reload-rules && /usr/bin/udevadm trigger || :
+
+%files
+%license LICENSE
+%{akmod_inst_dir}
+%{_sysconfdir}/akmods/%{akmod_name}.nm
+%{_udevrulesdir}/99-google-coral.rules
+%{_sysconfdir}/modules-load.d/google-coral.conf
+%{_sysusersdir}/google-coral.conf
+
+%changelog
+* Sat Jan 10 2026 mwprado <mwprado@github> - 1.0-20
+- Sincronização total com o padrão de metadados NVIDIA/kmodtool.
+- Adição de Provides akmod() e macro de subpacotes.
