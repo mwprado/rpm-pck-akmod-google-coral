@@ -3,12 +3,11 @@
 %endif
 %global debug_package %{nil}
 
-# 1. NOME ÚNICO: Define tudo o que o akmods vai buscar
 %global akmod_name google-coral-kmod
 
 Name:           google-coral-kmod
 Version:        1.0
-Release:        32.20260105git5815ee3%{?dist}
+Release:        33.20260105git5815ee3%{?dist}
 Summary:        Google Coral Edge TPU kernel module
 License:        GPLv2
 URL:            https://github.com/google/gasket-driver
@@ -24,26 +23,28 @@ BuildRequires:  %{_bindir}/kmodtool
 BuildRequires:  gcc, make, kernel-devel, elfutils-libelf-devel
 BuildRequires:  systemd-devel, systemd-rpm-macros
 
-# 2. PROVIDES: Forçamos o nome com -kmod
 Provides:       akmod(%{akmod_name}) = %{version}-%{release}
 
 %{!?kernels:%{?buildforkernels: %{expand:%( %{_bindir}/kmodtool --target %{_target_cpu} --repo %{name} --akmod %{akmod_name} %{?buildforkernels:--%{buildforkernels}} %{?kernels:--kmp %{?kernels}} 2>/dev/null )}}}
 
 %description
-Google Coral TPU driver seguindo o padrão NVIDIA.
+Google Coral TPU driver. Versão v33 com suporte ao link .latest exigido pelo Fedora 43.
 
 %prep
 %setup -q -n gasket-driver-5815ee3908a46a415aac616ac7b9aedcb98a504c
 %patch -P 3 -p1
 %patch -P 4 -p1
 
-%build
-# Processado via akmods
-
 %install
-# 3. PASTA FÍSICA: Deve ser identica ao akmod_name
+# 1. Pasta de fontes
 install -d %{buildroot}%{_usrsrc}/akmods/%{akmod_name}
 cp -r src/* %{buildroot}%{_usrsrc}/akmods/%{akmod_name}/
+
+# 2. O SEGREDO: Criar o link .latest que o script akmods procura
+# O akmods do Fedora 43 usa isso para identificar a versão ativa
+pushd %{buildroot}%{_usrsrc}/akmods/
+ln -s %{akmod_name} %{akmod_name}.latest
+popd
 
 # Suporte hardware
 install -D -m 0644 %{SOURCE1} %{buildroot}%{_udevrulesdir}/99-google-coral.rules
@@ -56,10 +57,11 @@ install -D -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 %files
 %license LICENSE
 %{_usrsrc}/akmods/%{akmod_name}
+%{_usrsrc}/akmods/%{akmod_name}.latest
 %{_udevrulesdir}/99-google-coral.rules
 %{_sysconfdir}/modules-load.d/google-coral.conf
 %{_sysusersdir}/google-coral.conf
 
 %changelog
-* Sat Jan 10 2026 mwprado <mwprado@github> - 1.0-32
-- Sincronização total de nomes para evitar 'Could not find'.
+* Sat Jan 10 2026 mwprado <mwprado@github> - 1.0-33
+- Adicionado link simbólico .latest para compatibilidade com akmods 0.6.2+.
