@@ -4,13 +4,14 @@
 %endif
 %global debug_package %{nil}
 
+# Ajuste crucial: O kmodtool usa o Name para derivar o akmod. 
+# Se Name é google-coral-kmod, o akmod será akmod-google-coral.
 %global akmod_name google-coral
 %global kmodsrc_name google-coral-kmodsrc
 
-# Metadados principais
 Name:           google-coral-kmod
 Version:        1.0
-Release:        64%{?dist}
+Release:        65%{?dist}
 Summary:        Kernel module for Google Coral Edge TPU
 License:        GPLv2
 URL:            https://github.com/google/gasket-driver
@@ -23,16 +24,14 @@ Source5:        google-coral-group.conf
 %global AkmodsBuildRequires %{_bindir}/kmodtool, %{kmodsrc_name} = %{version}, xz, time, gcc, make, kernel-devel, elfutils-libelf-devel, systemd-devel, systemd-rpm-macros
 BuildRequires:  %{AkmodsBuildRequires}
 
-# 3. Invocação do kmodtool (Gera o subpacote akmod dinamicamente)
-# REMOVEMOS as definições manuais de %package abaixo desta linha
+# 3. Invocação do kmodtool 
+# Ele criará dinamicamente o %package -n akmod-google-coral
 %{?kmodtool_prefix}
 %{expand:%(kmodtool --target %{_target_cpu} --repo rpmfusion --kmodname %{name} %{?buildforkernels:--%{buildforkernels}} %{?kernels:--for-kernels "%{?kernels}"} 2>/dev/null) }
 
 %description
 Package to manage Google Coral Edge TPU kernel modules.
 Follows NVIDIA and VirtualBox packaging standards for RPM Fusion.
-
-# --- ATENÇÃO: %package akmod FOI REMOVIDO PORQUE O KMODTOOL JÁ O GERA ---
 
 %prep
 %{?kmodtool_check}
@@ -52,6 +51,8 @@ install -p -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/modules-load.d/google-c
 mkdir -p %{buildroot}%{_sysusersdir}
 install -p -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 
+# 4. Scripts para o pacote gerado pelo kmodtool
+# Note que usamos exatamente o nome que o erro disse que não existia antes
 %pre -n akmod-%{akmod_name}
 %sysusers_create_package %{akmod_name} %{SOURCE5}
 
@@ -64,6 +65,6 @@ install -p -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 %{_sysusersdir}/google-coral.conf
 
 %changelog
-* Sun Jan 11 2026 mwprado <mwprado@github> - 1.0-64
-- Version 64: Removed manual akmod package definition to avoid conflict with kmodtool.
-- Strictly following RPM Fusion dynamic generation pattern.
+* Sun Jan 11 2026 mwprado <mwprado@github> - 1.0-65
+- Version 65: Aligned akmod_name with kmodtool's dynamic output.
+- Fixed "package does not exist" error in scripts and files sections.
