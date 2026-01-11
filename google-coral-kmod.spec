@@ -8,7 +8,7 @@
 
 Name:           %{kmodname}-kmod
 Version:        1.0
-Release:        80%{?dist}
+Release:        81%{?dist}
 Summary:        Kernel module for Google Coral Edge TPU
 License:        GPLv2
 URL:            https://github.com/google/gasket-driver
@@ -21,7 +21,7 @@ BuildRequires:  %{_bindir}/kmodtool
 BuildRequires:  %{kmodsrc_name} = %{version}
 BuildRequires:  gcc, make, xz, time, kernel-devel, elfutils-libelf-devel, systemd-devel, systemd-rpm-macros
 
-# 1. Injeção do kmodtool (Cria o pacote akmod-google-coral)
+# 1. Injeção do kmodtool (Aqui ele cria o %package e a lista de %files básica)
 %{expand:%(/usr/bin/kmodtool --target %{_target_cpu} --repo rpmfusion --kmodname %{name} %{?buildforkernels:--%{buildforkernels}} %{?kernels:--for-kernels "%{?kernels}"} 2>/dev/null) }
 
 %description
@@ -35,7 +35,7 @@ Google Coral Edge TPU kernel module infrastructure.
 # Vazio
 
 %install
-# 2. Instalação manual idêntica à v79
+# 2. Instalação manual
 mkdir -p %{buildroot}%{_usrsrc}/akmods
 ln -sf %{_datadir}/%{kmodsrc_name}-%{version}/%{name}-%{version}.tar.xz \
     %{buildroot}%{_usrsrc}/akmods/%{kmodname}.latest
@@ -47,15 +47,13 @@ install -p -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/modules-load.d/google-c
 mkdir -p %{buildroot}%{_sysusersdir}
 install -p -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 
-# 3. CORREÇÃO: Mapeando os arquivos para o pacote que o kmodtool criou
-# O VirtualBox faz isso anexando os seus arquivos à lista do akmod.
-%files -n akmod-%{kmodname}
-%{_usrsrc}/akmods/%{kmodname}.latest
-%{_udevrulesdir}/99-google-coral.rules
-%{_sysconfdir}/modules-load.d/google-coral.conf
-%{_sysusersdir}/google-coral.conf
+# 3. A SOLUÇÃO RIGOROSA: 
+# O VirtualBox usa esta macro para adicionar ficheiros à lista gerada pelo kmodtool
+# sem precisar de uma nova seção %files -n.
+%global akmod_files %{_usrsrc}/akmods/%{kmodname}.latest %{_udevrulesdir}/99-google-coral.rules %{_sysconfdir}/modules-load.d/google-coral.conf %{_sysusersdir}/google-coral.conf
 
 %changelog
-* Sun Jan 11 2026 mwprado <mwprado@github> - 1.0-80
-- Version 80: Fixed "unpackaged files" by explicitly declaring %files for the generated akmod package.
-- This is the final step to match VirtualBox's delivery of extra configs.
+* Sun Jan 11 2026 mwprado <mwprado@github> - 1.0-81
+- Version 81: Strict VirtualBox clone. 
+- Avoided '%files -n' to prevent duplicate package errors.
+- Used 'akmod_files' global override to package extra system files.
