@@ -1,97 +1,99 @@
+# 1. Flag de controle padrão RPM Fusion
+%if 0%{?fedora}
+%global buildforkernels akmod
+%endif
+%global debug_package %{nil}
+
 %global akmod_name google-coral
-%global _internal_name kmod-google-coral
+%global repo_name gasket-driver
+%global commit      5815ee3908a46a415aac616ac7b9aedcb98a504c
 
-Name:           akmod-google-coral
+Name:           google-coral-kmod
 Version:        1.0
-Release:        47.20260105git5815ee3%{?dist}
-Summary:        Akmod package for Google Coral Edge TPU driver
+Release:        28%{?dist}
+Summary:        Módulos do kernel para Google Coral Edge TPU (Padrão VirtualBox)
 License:        GPLv2
-URL:            https://github.com/google/gasket-driver
+URL:            https://github.com/google/%{repo_name}
 
-Source0:        %{url}/archive/5815ee3908a46a415aac616ac7b9aedcb98a504c/gasket-driver-5815ee3.tar.gz
+Source0:        %{url}/archive/%{commit}/%{repo_name}-5815ee3.tar.gz
 Source1:        99-google-coral.rules
 Source2:        google-coral.conf
 Source3:        fix-for-no_llseek.patch
 Source4:        fix-for-module-import-ns.patch
 Source5:        google-coral-group.conf
 
-# Ferramentas para o Inception (gerar o SRPM dentro do build)
-BuildRequires:  rpm-build, gcc, make, sed
+# 2. Dependências de Build usando as macros oficiais do VirtualBox/Nvidia
+BuildRequires:  %{AkmodsBuildRequires}
+BuildRequires:  systemd-devel
 BuildRequires:  systemd-rpm-macros
 
-# O Provide que o comando 'akmods' usa para te encontrar
+# 3. O "Cérebro": Invocação do kmodtool para gerar subpacotes dinâmicos
+%{?kmodtool_prefix}
+%(kmodtool --target %{_target_cpu} --repo %{repo_name} --akmod %{akmod_name} %{?kernels:--kmp %{?kernels}} 2>/dev/null)
+
+%description
+Metapacote para o driver Google Coral. Segue o padrão de infraestrutura
+utilizado pelo VirtualBox e NVIDIA no Fedora.
+
+# --- Seção do AKMOD (Onde ficam os fontes) ---
+%package -n akmod-%{akmod_name}
+Summary:        Akmod package for %{akmod_name} kernel module(s)
+Requires:       akmods kmodtool
 Provides:       akmod(%{akmod_name}) = %{version}-%{release}
 
-%description
-Este pacote contém o SRPM do driver Google Coral. O utilitário akmods 
-utilizará este arquivo para reconstruir o kmod binário para o seu kernel.
+%description -n akmod-%{akmod_name}
+Este pacote contém o código-fonte patcheado para o akmods construir o driver Coral.
 
 %prep
-%setup -q -n gasket-driver-5815ee3908a46a415aac616ac7b9aedcb98a504c
-%patch -P 3 -p1
-%patch -P 4 -p1
+# Verifica se o ambiente de kernel está pronto (Macro do VirtualBox)
+%{?kmodtool_check}
+%setup -q -n %{repo_name}-%{commit}
+
+# Aplica patches de compatibilidade
+patch -p1 < %{SOURCE3}
+patch -p1 < %{SOURCE4}
+
+# Prepara a pasta de build isolada por arquitetura (Padrão NVIDIA)
+mkdir -p _kmod_build_%{_target_cpu}
+cp -r src/* _kmod_build_%{_target_cpu}/
 
 %build
-# === PASSO 1: Criar o SPEC do kmod que irá dentro do SRPM ===
-cat << 'EOF' > %{_internal_name}.spec
-Name:           %{_internal_name}
-Version:        %{version}
-Release:        %{release}
-Summary:        Google Coral Edge TPU kernel module
-License:        GPLv2
-Source0:        google-coral-src.tar.gz
-
-%description
-Módulo de kernel compilado pelo sistema akmods.
-
-%prep
-%setup -q -n google-coral-src
-
-%build
-make -C /lib/modules/%{?kver}/build M=$(pwd)/src modules
+# Vazio: o build real acontece no computador do usuário
 
 %install
-install -D -m 0644 src/gasket.ko %{buildroot}/lib/modules/%{?kver}/extra/gasket/gasket.ko
-install -D -m 0644 src/apex.ko %{buildroot}/lib/modules/%{?kver}/extra/gasket/apex.ko
-EOF
+# 1. Instalação dos fontes para o akmod
+%global inst_dir %{_usrsrc}/akmods/%{akmod_name}-%{version}-%{release}
+mkdir -p %{buildroot}%{inst_dir}
+cp -r _kmod_build_%{_target_cpu}/* %{buildroot}%{inst_dir}/
 
-%install
-# === PASSO 2: Gerar o SRPM Real ===
-mkdir -p rpmbuild/{SOURCES,SPECS,SRPMS}
-# Criamos o tarball com o código patcheado
-tar -czf rpmbuild/SOURCES/google-coral-src.tar.gz .
-cp %{_internal_name}.spec rpmbuild/SPECS/
+# 2. Arquivo .nm (Essencial para o comando 'akmods' no Silverblue)
+mkdir -p %{buildroot}%{_sysconfdir}/akmods
+echo "%{akmod_name}" > %{buildroot}%{_sysconfdir}/akmods/%{akmod_name}.nm
 
-# Comando de build do SRPM interno
-rpmbuild -bs rpmbuild/SPECS/%{_internal_name}.spec \
-    --define "_topdir $(pwd)/rpmbuild" \
-    --define "kver %{kernel_version}"
+# 3. Regras de sistema e grupos
+mkdir -p %{buildroot}%{_udevrulesdir}
+install -p -m 0644 %{SOURCE1} %{buildroot}%{_udevrulesdir}/99-google-coral.rules
+mkdir -p %{buildroot}%{_sysconfdir}/modules-load.d
+install -p -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/modules-load.d/google-coral.conf
+mkdir -p %{buildroot}%{_sysusersdir}
+install -p -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 
-# === PASSO 3: Instalar o SRPM e o link .latest ===
-install -d %{buildroot}%{_usrsrc}/akmods/
-install -p -m 0644 rpmbuild/SRPMS/%{_internal_name}-*.src.rpm %{buildroot}%{_usrsrc}/akmods/%{_internal_name}.src.rpm
+%pre -n akmod-%{akmod_name}
+%sysusers_create_package %{akmod_name} %{SOURCE5}
 
-# O link crucial que evita o erro 'É um diretório'
-pushd %{buildroot}%{_usrsrc}/akmods/
-ln -s %{_internal_name}.src.rpm %{akmod_name}.latest
-popd
+%post -n akmod-%{akmod_name}
+# O gatilho que o VirtualBox usa para tentar compilar no momento da instalação
+%{_sbindir}/akmods --force --akmod %{akmod_name} &>/dev/null || :
 
-# Configurações de hardware
-install -D -m 0644 %{SOURCE1} %{buildroot}%{_udevrulesdir}/99-google-coral.rules
-install -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/modules-load.d/google-coral.conf
-install -D -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
-
-%pre
-%sysusers_create_package google-coral %{SOURCE5}
-
-%files
+%files -n akmod-%{akmod_name}
 %license LICENSE
-%{_usrsrc}/akmods/%{_internal_name}.src.rpm
-%{_usrsrc}/akmods/%{akmod_name}.latest
+%{inst_dir}
+%{_sysconfdir}/akmods/%{akmod_name}.nm
 %{_udevrulesdir}/99-google-coral.rules
 %{_sysconfdir}/modules-load.d/google-coral.conf
 %{_sysusersdir}/google-coral.conf
 
 %changelog
-* Sat Jan 10 2026 mwprado <mwprado@github> - 1.0-47
-- Arquitetura idêntica ao RPM Fusion: akmod transportando o SRPM do kmod.
+* Sun Jan 11 2026 mwprado <mwprado@github> - 1.0-28
+- Implementação completa baseada no padrão NVIDIA e VirtualBox.
+- Uso de macros dinâmicas kmodtool e AkmodsBuildRequires.
