@@ -3,13 +3,12 @@
 %endif
 %global debug_package %{nil}
 
-# Nome curto para o sistema de cache
 %global akmod_name google-coral
 
 Name:           google-coral-kmod
 Version:        1.0
-Release:        40.20260105git5815ee3%{?dist}
-Summary:        Google Coral Edge TPU kernel module
+Release:        43.20260105git5815ee3%{?dist}
+Summary:        Google Coral Edge TPU kernel module (Akmod Container)
 License:        GPLv2
 URL:            https://github.com/google/gasket-driver
 
@@ -24,14 +23,15 @@ BuildRequires:  %{_bindir}/kmodtool
 BuildRequires:  gcc, make, kernel-devel, elfutils-libelf-devel
 BuildRequires:  systemd-devel, systemd-rpm-macros
 
-# O metadado que faz o link entre o comando e o arquivo
+# O Provide que o comando 'akmods' monitora
 Provides:       akmod(%{akmod_name}) = %{version}-%{release}
 
 %{!?kernels:%{?buildforkernels: %{expand:%( %{_bindir}/kmodtool --target %{_target_cpu} --repo %{name} --akmod %{akmod_name} %{?buildforkernels:--%{buildforkernels}} %{?kernels:--kmp %{?kernels}} 2>/dev/null )}}}
 
 %description
-Google Coral TPU driver. Esta versão instala os fontes preparados para que 
-o akmodsbuild possa gerar o SRPM dinamicamente.
+Este pacote contém o código-fonte compactado do driver Google Coral. 
+Ao ser instalado, ele disponibiliza um arquivo que o utilitário akmods 
+utiliza para reconstruir o driver a cada atualização de kernel.
 
 %prep
 %setup -q -n gasket-driver-5815ee3908a46a415aac616ac7b9aedcb98a504c
@@ -39,19 +39,20 @@ o akmodsbuild possa gerar o SRPM dinamicamente.
 %patch -P 4 -p1
 
 %build
-# Nada a fazer aqui, o build é no cliente.
+# Aqui nós preparamos o "conteúdo" que vai ser reconstruído pelo akmods
+# No padrão NVIDIA, isso seria um .src.rpm real. 
+# Como estamos no Copr, vamos entregar o tarball patcheado.
 
 %install
-# 1. DIRETÓRIO DE DESTINO
 install -d %{buildroot}%{_usrsrc}/akmods/
 
-# 2. INSTALANDO O TARBALL (O akmodsbuild consegue ler o .tar.gz se houver um spec dentro)
-# Para garantir, vamos colocar o nome que o akmods gosta.
-install -p -m 0644 %{SOURCE0} %{buildroot}%{_usrsrc}/akmods/%{name}-%{version}.tar.gz
+# 1. Geramos o arquivo que simula o SRPM (tarball patcheado)
+# O akmodsbuild aceita .tar.gz se ele contiver a estrutura de build
+tar -czf %{buildroot}%{_usrsrc}/akmods/%{akmod_name}-%{version}.tar.gz .
 
-# 3. O LINK .LATEST (Apontando para o ARQUIVO)
+# 2. O LINK .LATEST (Apontando para o ARQUIVO, não pasta)
 pushd %{buildroot}%{_usrsrc}/akmods/
-ln -s %{name}-%{version}.tar.gz %{akmod_name}.latest
+ln -s %{akmod_name}-%{version}.tar.gz %{akmod_name}.latest
 popd
 
 # Suporte ao hardware
@@ -64,12 +65,14 @@ install -D -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 
 %files
 %license LICENSE
-%{_usrsrc}/akmods/%{name}-%{version}.tar.gz
+# O akmod-nvidia lista o .src.rpm aqui. Nós listamos o nosso tarball de fontes.
+%{_usrsrc}/akmods/%{akmod_name}-%{version}.tar.gz
 %{_usrsrc}/akmods/%{akmod_name}.latest
 %{_udevrulesdir}/99-google-coral.rules
 %{_sysconfdir}/modules-load.d/google-coral.conf
 %{_sysusersdir}/google-coral.conf
 
 %changelog
-* Sat Jan 10 2026 mwprado <mwprado@github> - 1.0-40
-- Entrega do código via tarball para evitar erro de diretório no akmodsbuild.
+* Sat Jan 10 2026 mwprado <mwprado@github> - 1.0-43
+- Estrutura de entrega via arquivo único (.tar.gz) para simular SRPM.
+- Correção do erro 21 (É um diretório).
