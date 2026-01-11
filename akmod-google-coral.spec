@@ -3,7 +3,7 @@
 %endif
 %global debug_package %{nil}
 
-# Ajuste para bater com o comando que você deseja usar
+# 1. NOME ÚNICO: Define tudo o que o akmods vai buscar
 %global akmod_name google-coral-kmod
 
 Name:           google-coral-kmod
@@ -24,14 +24,13 @@ BuildRequires:  %{_bindir}/kmodtool
 BuildRequires:  gcc, make, kernel-devel, elfutils-libelf-devel
 BuildRequires:  systemd-devel, systemd-rpm-macros
 
-# Este Provides é o que você confirmou que agora está funcionando
+# 2. PROVIDES: Forçamos o nome com -kmod
 Provides:       akmod(%{akmod_name}) = %{version}-%{release}
 
-# Macro de compatibilidade
 %{!?kernels:%{?buildforkernels: %{expand:%( %{_bindir}/kmodtool --target %{_target_cpu} --repo %{name} --akmod %{akmod_name} %{?buildforkernels:--%{buildforkernels}} %{?kernels:--kmp %{?kernels}} 2>/dev/null )}}}
 
 %description
-Google Coral TPU driver. Padrão NVIDIA-kmod.
+Google Coral TPU driver seguindo o padrão NVIDIA.
 
 %prep
 %setup -q -n gasket-driver-5815ee3908a46a415aac616ac7b9aedcb98a504c
@@ -39,10 +38,10 @@ Google Coral TPU driver. Padrão NVIDIA-kmod.
 %patch -P 4 -p1
 
 %build
-# Processado pelo akmods
+# Processado via akmods
 
 %install
-# O SEGREDO: A pasta deve ter o nome exato do Provides
+# 3. PASTA FÍSICA: Deve ser identica ao akmod_name
 install -d %{buildroot}%{_usrsrc}/akmods/%{akmod_name}
 cp -r src/* %{buildroot}%{_usrsrc}/akmods/%{akmod_name}/
 
@@ -63,5 +62,4 @@ install -D -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 
 %changelog
 * Sat Jan 10 2026 mwprado <mwprado@github> - 1.0-32
-- Nome do akmod alterado para google-coral-kmod para aceitar o comando completo.
-- Pasta de fontes sincronizada com o Provides.
+- Sincronização total de nomes para evitar 'Could not find'.
