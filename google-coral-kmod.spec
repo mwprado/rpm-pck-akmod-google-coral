@@ -1,15 +1,20 @@
+# 1. Definições Iniciais (Exatamente como na NVIDIA)
 %if 0%{?fedora}
 %global buildforkernels akmod
 %endif
-%global rhel %{nil}
 %global debug_package %{nil}
 
-# Definimos apenas para uso interno, mas não confiaremos nelas para os nomes das seções
+%global akmod_name google-coral
 %global kmodsrc_name google-coral-kmodsrc
+
+# 2. Invocação do kmodtool com Prefix (O padrão rigoroso)
+# A NVIDIA usa o prefixo para evitar que o output "suje" o cabeçalho global
+%{?kmodtool_prefix}
+%(kmodtool --target %{_target_cpu} --repo rpmfusion --kmodname %{name} %{?buildforkernels:--%{buildforkernels}} %{?kernels:--for-kernels "%{?kernels}"} 2>/dev/null)
 
 Name:           google-coral-kmod
 Version:        1.0
-Release:        68%{?dist}
+Release:        72%{?dist}
 Summary:        Kernel module for Google Coral Edge TPU
 License:        GPLv2
 URL:            https://github.com/google/gasket-driver
@@ -18,28 +23,21 @@ Source1:        99-google-coral.rules
 Source2:        google-coral.conf
 Source5:        google-coral-group.conf
 
-# 1. BuildRequires (Estrutura idêntica à do VirtualBox)
+# 3. BuildRequires (A lista exata do RPM Fusion)
 %global AkmodsBuildRequires %{_bindir}/kmodtool, %{kmodsrc_name} = %{version}, xz, time, gcc, make, kernel-devel, elfutils-libelf-devel, systemd-devel, systemd-rpm-macros
 BuildRequires:  %{AkmodsBuildRequires}
 
-# 2. Invocação do kmodtool (Define macros para o akmod_install)
-%{?kmodtool_prefix}
-%(kmodtool --target %{_target_cpu} --repo rpmfusion --kmodname %{name} %{?buildforkernels:--%{buildforkernels}} %{?kernels:--for-kernels "%{?kernels}"} 2>/dev/null)
+# 4. Segunda expansão (Onde a NVIDIA injeta os subpacotes binários)
+%{expand:%(kmodtool --target %{_target_cpu} --repo rpmfusion --kmodname %{name} %{?buildforkernels:--%{buildforkernels}} %{?kernels:--for-kernels "%{?kernels}"} 2>/dev/null) }
 
 %description
 Package to manage Google Coral Edge TPU kernel modules.
+Follows NVIDIA and VirtualBox packaging standards for RPM Fusion.
 
-# 3. Definição DIRETA do pacote (Sem macros no nome para o rpkg não engasgar)
-%package -n akmod-google-coral
-Summary:        Akmod package for google-coral kernel module(s)
-Requires:       akmods kmodtool
-Requires:       %{kmodsrc_name} = %{version}
-Provides:       akmod(google-coral) = %{version}-%{release}
-
-%description -n akmod-google-coral
-This package installs the infrastructure to build Google Coral modules.
+# --- Nota: O %package akmod NÃO é escrito aqui, o kmodtool injeta-o ---
 
 %prep
+# Verificação de sanidade do kmodtool
 %{?kmodtool_check}
 %setup -q -T -c -n %{name}-%{version}
 
@@ -47,9 +45,10 @@ This package installs the infrastructure to build Google Coral modules.
 # Vazio
 
 %install
-# A macro akmod_install cria o link .latest em /usr/src/akmods/
+# A macro que faz a ligação ao kmodsrc e cria o .latest
 %{?akmod_install}
 
+# Instalação manual de ficheiros de suporte
 mkdir -p %{buildroot}%{_udevrulesdir}
 install -p -m 0644 %{SOURCE1} %{buildroot}%{_udevrulesdir}/99-google-coral.rules
 mkdir -p %{buildroot}%{_sysconfdir}/modules-load.d
@@ -57,19 +56,19 @@ install -p -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/modules-load.d/google-c
 mkdir -p %{buildroot}%{_sysusersdir}
 install -p -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 
-# 4. Scripts com nome DIRETO (akmod-google-coral)
-%pre -n akmod-google-coral
-%sysusers_create_package google-coral %{SOURCE5}
+# 5. Scripts vinculados ao nome que o kmodtool gera (akmod-google-coral)
+%pre -n akmod-%{akmod_name}
+%sysusers_create_package %{akmod_name} %{SOURCE5}
 
-%post -n akmod-google-coral
-%{_sbindir}/akmods --force --akmod google-coral &>/dev/null || :
+%post -n akmod-%{akmod_name}
+%{_sbindir}/akmods --force --akmod %{akmod_name} &>/dev/null || :
 
-%files -n akmod-google-coral
+%files -n akmod-%{akmod_name}
 %{_udevrulesdir}/99-google-coral.rules
 %{_sysconfdir}/modules-load.d/google-coral.conf
 %{_sysusersdir}/google-coral.conf
 
 %changelog
-* Sun Jan 11 2026 mwprado <mwprado@github> - 1.0-68
-- Version 68: Hardcoded package names to bypass Copr/rpkg static parsing errors.
-- Matches NVIDIA's internal structure for broad compatibility.
+* Sun Jan 11 2026 mwprado <mwprado@github> - 1.0-72
+- Version 72: Strictly mirrored NVIDIA/RPM Fusion spec structure.
+- Corrected double-expansion of kmodtool to resolve dynamic subpackaging.
