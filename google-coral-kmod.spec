@@ -57,13 +57,10 @@ mkdir -p %{buildroot}%{_sysusersdir}
 install -p -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 
 # 5. Scripts vinculados ao nome que o kmodtool gera (akmod-google-coral)
-%pre -n akmod-%{akmod_name}
+%pre
 %sysusers_create_package %{akmod_name} %{SOURCE5}
 
-%post -n akmod-%{akmod_name}
-%{_sbindir}/akmods --force --akmod %{akmod_name} &>/dev/null || :
-
-%files -n akmod-%{akmod_name}
+%files 
 %{_udevrulesdir}/99-google-coral.rules
 %{_sysconfdir}/modules-load.d/google-coral.conf
 %{_sysusersdir}/google-coral.conf
