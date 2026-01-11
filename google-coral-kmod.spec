@@ -1,7 +1,7 @@
 %if 0%{?fedora}
 %global buildforkernels akmod
 %endif
-%global with_rhel_kabi
+%global with_rhel_kabi %{nil}
 %global debug_package %{nil}
 
 # Definimos apenas para uso interno, mas não confiaremos nelas para os nomes das seções
