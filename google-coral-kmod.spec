@@ -3,7 +3,7 @@
 %endif
 %global debug_package %{nil}
 
-%global akmod_name google-coral
+%global akmod_name google-coral-kmod
 %global kmodsrc_name google-coral-kmodsrc
 
 # Invocação do kmodtool ANTES do Name/Version para que os %globals 
@@ -23,10 +23,11 @@ Source2:        google-coral.conf
 Source5:        google-coral-group.conf
 
 # Requisitos rigorosos do RPM Fusion
-%global AkmodsBuildRequires %{_bindir}/kmodtool, %{kmodsrc_name} = %{version}, gcc, make, kernel-devel, elfutils-libelf-devel
+%global AkmodsBuildRequires %{_bindir}/kmodtool, %{kmodsrc_name} = %{version} xz time gcc make kernel-devel elfutils-libelf-devel systemd-devel systemd-rpm-macros
 BuildRequires:  %{AkmodsBuildRequires}
-BuildRequires:  systemd-devel
-BuildRequires:  systemd-rpm-macros
+
+# kmodtool does its magic here
+%{expand:%(kmodtool --target %{_target_cpu} --repo rpmfusion --kmodname %{name} %{?buildforkernels:--%{buildforkernels}} %{?kernels:--for-kernels "%{?kernels}"}  2>/dev/null) }
 
 %description
 Package to manage Google Coral Edge TPU kernel modules.
@@ -44,6 +45,13 @@ This package installs the infrastructure to build Google Coral modules.
 %prep
 %{?kmodtool_check}
 %setup -q -T -c -n %{name}-%{version}
+
+# error out if there was something wrong with kmodtool
+%{?kmodtool_check}
+
+# print kmodtool output for debugging purposes:
+kmodtool --target %{_target_cpu}  --repo rpmfusion --kmodname %{name} %{?buildforkernels:--%{buildforkernels}} %{?kernels:--for-kernels "%{?kernels}"} --filterfile %{SOURCE1} 2>/dev/null
+
 
 %build
 # Vazio
