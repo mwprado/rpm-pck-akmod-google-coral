@@ -3,12 +3,12 @@
 %endif
 %global debug_package %{nil}
 
-# Sincronizado com o Provide que já funciona
+# Nome curto que o akmods busca no diretório
 %global akmod_name google-coral
 
 Name:           google-coral-kmod
 Version:        1.0
-Release:        37.20260105git5815ee3%{?dist}
+Release:        39.20260105git5815ee3%{?dist}
 Summary:        Google Coral Edge TPU kernel module
 License:        GPLv2
 URL:            https://github.com/google/gasket-driver
@@ -24,31 +24,38 @@ BuildRequires:  %{_bindir}/kmodtool
 BuildRequires:  gcc, make, kernel-devel, elfutils-libelf-devel
 BuildRequires:  systemd-devel, systemd-rpm-macros
 
+# Metadado essencial para o comando 'akmods --akmod google-coral'
 Provides:       akmod(%{akmod_name}) = %{version}-%{release}
 
 %{!?kernels:%{?buildforkernels: %{expand:%( %{_bindir}/kmodtool --target %{_target_cpu} --repo %{name} --akmod %{akmod_name} %{?buildforkernels:--%{buildforkernels}} %{?kernels:--kmp %{?kernels}} 2>/dev/null )}}}
 
 %description
-Google Coral TPU driver. Empacotado para espelhar o comportamento do driver NVIDIA.
+Google Coral TPU driver. Versão v39: Instala o código como um arquivo 
+compactado para satisfazer o akmodsbuild do Fedora 43.
 
 %prep
 %setup -q -n gasket-driver-5815ee3908a46a415aac616ac7b9aedcb98a504c
 %patch -P 3 -p1
 %patch -P 4 -p1
 
+%build
+# O build real ocorre no lado do cliente via akmods
+
 %install
-# 1. CRIANDO A ESTRUTURA IDENTICA À NVIDIA
+# 1. DIRETÓRIO DE FONTES (Padrão NVIDIA)
 install -d %{buildroot}%{_usrsrc}/akmods/
 
-# Em vez de pasta solta, instalamos o Source preparado (o akmods aceita o .tar.gz como fonte)
+# 2. O PULO DO GATO: Instalamos o arquivo de fontes (tarball) diretamente.
+# O akmodsbuild aceita arquivos compactados que contenham um Makefile/Spec.
 install -p -m 0644 %{SOURCE0} %{buildroot}%{_usrsrc}/akmods/%{name}-%{version}.tar.gz
 
-# 2. O LINK .LATEST (Apontando para o ARQUIVO, não para a pasta)
+# 3. O LINK .LATEST (Apontando para o ARQUIVO, não para a pasta)
+# Isso evita o erro: "falha na leitura: É um diretório"
 pushd %{buildroot}%{_usrsrc}/akmods/
 ln -s %{name}-%{version}.tar.gz %{akmod_name}.latest
 popd
 
-# 3. SUPORTE AO HARDWARE
+# Suporte ao hardware
 install -D -m 0644 %{SOURCE1} %{buildroot}%{_udevrulesdir}/99-google-coral.rules
 install -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/modules-load.d/google-coral.conf
 install -D -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
@@ -65,5 +72,5 @@ install -D -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 %{_sysusersdir}/google-coral.conf
 
 %changelog
-* Sat Jan 10 2026 mwprado <mwprado@github> - 1.0-37
-- Ajustado link .latest para apontar para um arquivo tarball, evitando erro de 'É um diretório'.
+* Sat Jan 10 2026 mwprado <mwprado@github> - 1.0-39
+- Substituído diretório por arquivo tarball no link .latest para evitar Erro 21.
