@@ -58,13 +58,13 @@ install -p -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/modules-load.d/google-c
 mkdir -p %{buildroot}%{_sysusersdir}
 install -p -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 
-%pre -n akmod-%{akmod_name}
+%pre akmod-%{akmod_name}
 %sysusers_create_package %{akmod_name} %{SOURCE5}
 
-%post -n akmod-%{akmod_name}
+%post akmod-%{akmod_name}
 %{_sbindir}/akmods --force --akmod %{akmod_name} &>/dev/null || :
 
-%files -n akmod-%{akmod_name}
+%files akmod-%{akmod_name}
 %{_udevrulesdir}/99-google-coral.rules
 %{_sysconfdir}/modules-load.d/google-coral.conf
 %{_sysusersdir}/google-coral.conf
