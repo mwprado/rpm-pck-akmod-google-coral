@@ -1,8 +1,11 @@
-# 1. Flag de controle padrão RPM Fusion
+# 1. Configurações de controle de build
 %if 0%{?fedora}
 %global buildforkernels akmod
 %endif
 %global debug_package %{nil}
+
+# Definição manual da macro caso o sistema não a tenha (Padrão NVIDIA)
+%{!?AkmodsBuildRequires: %global AkmodsBuildRequires gcc, make, kernel-devel, kmodtool, elfutils-libelf-devel}
 
 %global akmod_name google-coral
 %global repo_name gasket-driver
@@ -10,8 +13,8 @@
 
 Name:           google-coral-kmod
 Version:        1.0
-Release:        28%{?dist}
-Summary:        Módulos do kernel para Google Coral Edge TPU (Padrão VirtualBox)
+Release:        29%{?dist}
+Summary:        Módulos do kernel para Google Coral Edge TPU
 License:        GPLv2
 URL:            https://github.com/google/%{repo_name}
 
@@ -22,55 +25,51 @@ Source3:        fix-for-no_llseek.patch
 Source4:        fix-for-module-import-ns.patch
 Source5:        google-coral-group.conf
 
-# 2. Dependências de Build usando as macros oficiais do VirtualBox/Nvidia
+# 2. Dependências de Build
 BuildRequires:  %{AkmodsBuildRequires}
 BuildRequires:  systemd-devel
 BuildRequires:  systemd-rpm-macros
 
-# 3. O "Cérebro": Invocação do kmodtool para gerar subpacotes dinâmicos
+# 3. Invocação do kmodtool (O "Cérebro" dos specs que você enviou)
 %{?kmodtool_prefix}
 %(kmodtool --target %{_target_cpu} --repo %{repo_name} --akmod %{akmod_name} %{?kernels:--kmp %{?kernels}} 2>/dev/null)
 
 %description
-Metapacote para o driver Google Coral. Segue o padrão de infraestrutura
-utilizado pelo VirtualBox e NVIDIA no Fedora.
+Pacote de driver para Google Coral seguindo o padrão NVIDIA/VirtualBox.
 
-# --- Seção do AKMOD (Onde ficam os fontes) ---
 %package -n akmod-%{akmod_name}
 Summary:        Akmod package for %{akmod_name} kernel module(s)
 Requires:       akmods kmodtool
 Provides:       akmod(%{akmod_name}) = %{version}-%{release}
 
 %description -n akmod-%{akmod_name}
-Este pacote contém o código-fonte patcheado para o akmods construir o driver Coral.
+Código-fonte patcheado para compilação via akmods.
 
 %prep
-# Verifica se o ambiente de kernel está pronto (Macro do VirtualBox)
 %{?kmodtool_check}
 %setup -q -n %{repo_name}-%{commit}
 
-# Aplica patches de compatibilidade
+# Aplica patches
 patch -p1 < %{SOURCE3}
 patch -p1 < %{SOURCE4}
 
-# Prepara a pasta de build isolada por arquitetura (Padrão NVIDIA)
+# Estrutura de build isolada
 mkdir -p _kmod_build_%{_target_cpu}
 cp -r src/* _kmod_build_%{_target_cpu}/
 
 %build
-# Vazio: o build real acontece no computador do usuário
+# Vazio para akmods
 
 %install
-# 1. Instalação dos fontes para o akmod
 %global inst_dir %{_usrsrc}/akmods/%{akmod_name}-%{version}-%{release}
 mkdir -p %{buildroot}%{inst_dir}
 cp -r _kmod_build_%{_target_cpu}/* %{buildroot}%{inst_dir}/
 
-# 2. Arquivo .nm (Essencial para o comando 'akmods' no Silverblue)
+# Arquivos de controle
 mkdir -p %{buildroot}%{_sysconfdir}/akmods
 echo "%{akmod_name}" > %{buildroot}%{_sysconfdir}/akmods/%{akmod_name}.nm
 
-# 3. Regras de sistema e grupos
+# Configurações de sistema
 mkdir -p %{buildroot}%{_udevrulesdir}
 install -p -m 0644 %{SOURCE1} %{buildroot}%{_udevrulesdir}/99-google-coral.rules
 mkdir -p %{buildroot}%{_sysconfdir}/modules-load.d
@@ -82,7 +81,6 @@ install -p -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 %sysusers_create_package %{akmod_name} %{SOURCE5}
 
 %post -n akmod-%{akmod_name}
-# O gatilho que o VirtualBox usa para tentar compilar no momento da instalação
 %{_sbindir}/akmods --force --akmod %{akmod_name} &>/dev/null || :
 
 %files -n akmod-%{akmod_name}
@@ -92,8 +90,3 @@ install -p -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 %{_udevrulesdir}/99-google-coral.rules
 %{_sysconfdir}/modules-load.d/google-coral.conf
 %{_sysusersdir}/google-coral.conf
-
-%changelog
-* Sun Jan 11 2026 mwprado <mwprado@github> - 1.0-28
-- Implementação completa baseada no padrão NVIDIA e VirtualBox.
-- Uso de macros dinâmicas kmodtool e AkmodsBuildRequires.
