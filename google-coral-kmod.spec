@@ -8,7 +8,7 @@
 
 Name:           %{kmodname}-kmod
 Version:        1.0
-Release:        86%{?dist}
+Release:        87%{?dist}
 Summary:        Kernel module for Google Coral Edge TPU
 License:        GPLv2
 URL:            https://github.com/google/gasket-driver
@@ -21,11 +21,12 @@ BuildRequires:  %{_bindir}/kmodtool
 BuildRequires:  %{kmodsrc_name} = %{version}
 BuildRequires:  gcc, make, xz, time, kernel-devel, elfutils-libelf-devel, systemd-devel, systemd-rpm-macros
 
-# 1. Injeção dinâmica do kmodtool
+# 1. Injeção dinâmica (Como manda a seção 2.1 da doc)
 %{expand:%(/usr/bin/kmodtool --target %{_target_cpu} --repo rpmfusion --kmodname %{name} %{?buildforkernels:--%{buildforkernels}} %{?kernels:--for-kernels "%{?kernels}"} 2>/dev/null) }
 
 %description
 Google Coral Edge TPU kernel module infrastructure.
+Rigorously follows RPM Fusion Kmods2 documentation.
 
 %prep
 %{?kmodtool_check}
@@ -35,12 +36,11 @@ Google Coral Edge TPU kernel module infrastructure.
 # Vazio
 
 %install
-# 2. O LINK .LATEST (Rigorosamente conforme seus exemplos)
+# 2. O link .latest (Relativo conforme NVIDIA/VirtualBox)
 mkdir -p %{buildroot}%{_usrsrc}/akmods
-# Criamos o link relativo para o SRPM que reside na mesma pasta
 ln -sf %{name}-%{version}-%{release}.src.rpm %{buildroot}%{_usrsrc}/akmods/%{kmodname}.latest
 
-# Instalação de ficheiros extras
+# Instalação de arquivos extras
 mkdir -p %{buildroot}%{_udevrulesdir}
 install -p -m 0644 %{SOURCE1} %{buildroot}%{_udevrulesdir}/99-google-coral.rules
 mkdir -p %{buildroot}%{_sysconfdir}/modules-load.d
@@ -48,21 +48,12 @@ install -p -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/modules-load.d/google-c
 mkdir -p %{buildroot}%{_sysusersdir}
 install -p -m 0644 %{SOURCE5} %{buildroot}%{_sysusersdir}/google-coral.conf
 
-# 3. A SOLUÇÃO FINAL PARA O COPR:
-# O kmodtool injetou o pacote akmod-google-coral. 
-# Para adicionar arquivos sem usar "-n" (duplicata), usamos a expansão da lista de arquivos
-# que o próprio kmodtool preparou na variável de ambiente.
-%{?kmodtool_files}
-
-# Se a macro acima falhar no Copr, usamos a forma manual que o VirtualBox 
-# às vezes usa em forks: anexar ao final da lista dinâmica.
-%files -f %{name}-%{_target_cpu}.files
-%{_usrsrc}/akmods/%{kmodname}.latest
-%{_udevrulesdir}/99-google-coral.rules
-%{_sysconfdir}/modules-load.d/google-coral.conf
-%{_sysusersdir}/google-coral.conf
+# 3. A SOLUÇÃO DA DOCUMENTAÇÃO (Seção 5.1 - Extra files)
+# Definimos a variável que o kmodtool usa para construir a seção %files dinamicamente.
+# Isso evita o erro de "unpackaged files" sem precisar de %files -n manual.
+%global kmod_files %{_udevrulesdir}/99-google-coral.rules %{_sysconfdir}/modules-load.d/google-coral.conf %{_sysusersdir}/google-coral.conf %{_usrsrc}/akmods/%{kmodname}.latest
 
 %changelog
-* Sun Jan 11 2026 mwprado <mwprado@github> - 1.0-86
-- Version 86: Used -f flag with the kmodtool generated file list to avoid -n conflicts.
-- Fixed unpackaged files error by merging manual files with dynamic list.
+* Tue Jan 13 2026 mwprado <mwprado@github> - 1.0-87
+- Version 87: Implemented kmod_files global as per RPM Fusion Kmods2 documentation.
+- Resolved unpackaged files error by injecting files into the dynamic filelist.
