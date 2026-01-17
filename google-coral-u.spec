@@ -1,53 +1,61 @@
 Name:           google-coral
 Version:        1.0
 Release:        1%{?dist}
-Summary:        User-space tools and udev rules for Google Coral Edge TPU
-
-License:        ASL 2.0
+Summary:        Userland support for Google Coral Edge TPU
+License:        GPLv2
 URL:            https://github.com/google/gasket-driver
-# Usaremos o mesmo source ou um específico para ferramentas, se houver
-Source0:        https://github.com/google/gasket-driver/archive/refs/heads/main.tar.gz
+
+# Fontes vindas do seu GitHub conforme solicitado
+Source0:        https://raw.githubusercontent.com/mwprado/rpm-pck-akmod-google-coral/main/99-google-coral.rules
+Source1:        https://raw.githubusercontent.com/mwprado/rpm-pck-akmod-google-coral/main/google-coral.conf
+Source2:        https://raw.githubusercontent.com/mwprado/rpm-pck-akmod-google-coral/main/google-coral-group.conf
 
 BuildArch:      noarch
 
-# Dependência crucial para o Silverblue:
-# Ao instalar as regras de usuário, o sistema traz o akmod automaticamente.
-Requires:       akmod-google-coral-kmod >= %{version}
-
-# Fornece a tag comum que o padrão Kmods2 espera
+# REGRAS OBRIGATÓRIAS DO RPM FUSION (Seção 4 da Doc Kmods2)
+# 1. O pacote se amarra ao kmod
+Requires:       google-coral-kmod >= %{version}
+# 2. O pacote provê a base comum para o driver
 Provides:       google-coral-kmod-common = %{version}
 
+BuildRequires:  systemd-rpm-macros
+
 %description
-Provides the udev rules and configuration files required to use 
-Google Coral Edge TPU devices without needing root privileges.
+Userland configuration for Google Coral Edge TPU.
+Includes udev rules, group creation, and module loading configuration.
+This package is required for the kernel module to function with correct permissions.
 
 %prep
-%setup -q -n gasket-driver-main
+# Apenas para criar o diretório de build
+%setup -q -c -n %{name}-%{version} -T
 
 %build
-# Geralmente aqui não há compilação se forem apenas regras de udev e scripts.
-# Se houver ferramentas em C do Google, o 'make' viria aqui.
+# Pacote de configuração, nada para compilar aqui.
 
 %install
-rm -rf ${RPM_BUILD_ROOT}
+# Instalação das Regras de Udev
+mkdir -p %{buildroot}%{_udevrulesdir}
+install -p -m 0644 %{SOURCE0} %{buildroot}%{_udevrulesdir}/99-google-coral.rules
 
-# 1. Instalar regras do udev (Caminho padrão no Fedora/Silverblue)
-mkdir -p ${RPM_BUILD_ROOT}%{_udevrulesdir}
-cat <<EOF > ${RPM_BUILD_ROOT}%{_udevrulesdir}/60-google-coral.rules
-# Gasket driver permissions para Coral Edge TPU
-SUBSYSTEM=="gasket", KERNEL=="gasket*", GROUP="plugdev", MODE="0660"
-SUBSYSTEM=="apex", KERNEL=="apex*", GROUP="plugdev", MODE="0660"
-EOF
+# Instalação da carga automática do módulo
+mkdir -p %{buildroot}%{_sysconfdir}/modules-load.d
+install -p -m 0644 %{SOURCE1} %{buildroot}%{_sysconfdir}/modules-load.d/google-coral.conf
 
-# 2. Criar o grupo plugdev se necessário (comum em setups de hardware)
-# Nota: No Fedora moderno, recomenda-se usar o grupo 'video' ou 'render'
-# mas manteremos um padrão customizável ou usaremos 'uaccess' via TAG.
+# Instalação da definição de Grupo (Sysusers)
+mkdir -p %{buildroot}%{_sysusersdir}
+install -p -m 0644 %{SOURCE2} %{buildroot}%{_sysusersdir}/google-coral.conf
+
+%pre
+# Criação do grupo via sysusers (Padrão Fedora Moderno)
+%sysusers_create_package %{name} %{SOURCE2}
 
 %files
-%license LICENSE
-%doc README.md
-%{_udevrulesdir}/60-google-coral.rules
+%license
+%{_udevrulesdir}/99-google-coral.rules
+%{_sysconfdir}/modules-load.d/google-coral.conf
+%{_sysusersdir}/google-coral.conf
 
 %changelog
-* Sat Jan 17 2026 Seu Nome <seu@email.com> - 1.0-1
-- Initial user-space package with udev rules.
+* Sat Jan 17 2026 mwprado <mwprado@github> - 1.0-1
+- Initial Userland package following RPM Fusion Split-Package guidelines.
+- Sources pulled directly from GitHub main branch.
