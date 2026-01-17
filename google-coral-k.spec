@@ -13,11 +13,11 @@ Summary:        Kernel module for Google Coral Edge TPU
 License:        ASL 2.0
 URL:            https://github.com/google/gasket-driver
 # Fonte original do Google (Exemplo: gasket-driver)
-Source0:        https://github.com/google/gasket-driver/archive/refs/heads/main.tar.gz#/%{kmod_name}-%{version}.tar.gz
+Source0:        https://github.com/google/gasket-driver/archive/refs/heads/main.zip
 
 # Seus patches no seu GitHub (substitua pelos links reais "raw")
-Patch0:         https://raw.githubusercontent.com/seu-usuario/repo/main/patch-kernel-compat.patch
-Patch1:         https://raw.githubusercontent.com/seu-usuario/repo/main/fix-pci-ids.patch
+Patch0:         https://raw.githubusercontent.com/mwprado/rpm-pck-akmod-google-coral/refs/heads/main/fix-for-module-import-ns.patch
+Patch1:         https://raw.githubusercontent.com/mwprado/rpm-pck-akmod-google-coral/refs/heads/main/fix-for-no_llseek.patch
 
 BuildRequires:  %{_bindir}/kmodtool
 BuildRequires:  gcc
@@ -35,13 +35,13 @@ This package provides the kernel driver for Google Coral devices (Gasket/Apex).
 
 # 1. Extrai o código fonte
 %setup -q -c -T -a 0
-cd gasket-driver-main/ # Ajuste conforme o nome da pasta dentro do tar.gz
+pushd main/ # Ajuste conforme o nome da pasta dentro do tar.gz
 
 # 2. Aplica seus patches aqui, antes da replicação
 %patch0 -p1
 %patch1 -p1
 
-cd ..
+popd
 
 # 3. Replica o código fonte para cada versão de kernel que será compilada
 for kernel_version in %{?kernel_versions} ; do
