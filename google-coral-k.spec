@@ -35,7 +35,7 @@ This package provides the kernel driver for Google Coral devices (Gasket/Apex).
 
 # 1. Extrai o código fonte
 %setup -q -c -T -a 0
-pushd main/ # Ajuste conforme o nome da pasta dentro do tar.gz
+pushd gasket-driver-main/
 
 # 2. Aplica seus patches aqui, antes da replicação
 %patch 0 -p1
