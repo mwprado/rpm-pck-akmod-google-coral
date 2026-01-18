@@ -28,15 +28,18 @@ It provides the source package for automatic kernel module building.
 
 %build
 # Vazio: o build real ocorre no cliente via akmods 
-
 %install
+# Garante que o diretório de destino existe no BUILDROOT
 mkdir -p %{buildroot}%{_usrsrc}/akmods
-# Link .latest relativo apontando para o SRPM (Padrão NVIDIA/VirtualBox)
-ln -sf %{name}-%{version}-%{release}.src.rpm %{buildroot}%{_usrsrc}/akmods/google-coral.latest
 
-# Instalação via macro oficial 
-%{?akmod_install} 
+# Entra no diretório para fazer o link relativo sem erro de path
+pushd %{buildroot}%{_usrsrc}/akmods
+# O SRPM deve ser colocado aqui (geralmente pelo kmodtool ou manualmente)
+# Criamos o link relativo puro
+ln -sf %{name}-%{version}-%{release}.src.rpm %{kmodname}.latest
+popd
 
+%{?akmod_install}
 %files
 # O kmodtool preenche esta seção automaticamente para o subpacote akmod 
 
