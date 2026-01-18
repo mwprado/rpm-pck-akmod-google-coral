@@ -12,11 +12,11 @@ Source2:        https://raw.githubusercontent.com/mwprado/rpm-pck-akmod-google-c
 
 BuildArch:      noarch
 
-# SEÇÃO DE DEPENDÊNCIAS (Rigor RPM Fusion) [cite: 33, 34]
+# SEÇÃO DE DEPENDÊNCIAS (Rigor RPM Fusion)
 # Requer o módulo do kernel para funcionar
 Requires:       google-coral-kmod >= %{version} 
 # Provê a base comum exigida pela documentação Kmods2
-Provides:       google-coral-kmod-common = %{version} [cite: 34]
+Provides:       google-coral-kmod-common = %{version}
 
 BuildRequires:  systemd-rpm-macros
 
