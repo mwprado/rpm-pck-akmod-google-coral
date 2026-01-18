@@ -1,48 +1,64 @@
+%global kmodname google-coral
 %define buildforkernels akmod
 
 Name:           google-coral-kmod
 Version:        1.0
 Release:        1%{?dist}
-Summary:        Kernel module for Google Coral Edge TPU
+Summary:        Módulo de kernel para Google Coral Edge TPU
 License:        GPLv2
 URL:            https://github.com/google/gasket-driver
 
-# Este pacote foca apenas no kmodtool e no código fonte
+# Dependências de Build conforme madwifi-kmod.spec
 BuildRequires:  %{_bindir}/kmodtool
 BuildRequires:  google-coral-kmodsrc = %{version}
 BuildRequires:  gcc, make, xz, time, kernel-devel, elfutils-libelf-devel
-# Exigência para o funcionamento do akmod 
-BuildRequires:  sharutils 
-%define AkmodsBuildRequires sharutils 
+BuildRequires:  sharutils
+%define AkmodsBuildRequires sharutils
 
-# Injeção mágica do kmodtool (Padrão MadWiFi/RPM Fusion)
-%{expand:%(kmodtool --target %{_target_cpu} --repo rpmfusion --kmodname %{name} %{?buildforkernels:--%{buildforkernels}} %{?kernels:--for-kernels "%{?kernels}"} 2>/dev/null) }
+# Expansão dinâmica do kmodtool
+%{expand:%(/usr/bin/kmodtool --target %{_target_cpu} --repo rpmfusion --kmodname %{name} %{?buildforkernels:--%{buildforkernels}} %{?kernels:--for-kernels "%{?kernels}"} 2>/dev/null) }
 
 %description
-This package contains the akmod infrastructure for the Google Coral Edge TPU driver.
-It provides the source package for automatic kernel module building.
+Infraestrutura akmod para o driver Google Coral Edge TPU.
+Este pacote reconstrói o módulo do kernel automaticamente após atualizações.
 
 %prep
-%{?kmodtool_check} 
+%{?kmodtool_check}
 %setup -q -T -c -n %{name}-%{version}
 
 %build
-# Vazio: o build real ocorre no cliente via akmods 
+# Vazio
+
 %install
-# Garante que o diretório de destino existe no BUILDROOT
+# 1. Preparação do diretório no BUILDROOT
 mkdir -p %{buildroot}%{_usrsrc}/akmods
 
-# Entra no diretório para fazer o link relativo sem erro de path
+# 2. Geração do SRPM interno (Padrão para entrega via akmod)
+rpmbuild --define '_sourcedir %{_sourcedir}' \
+         --define '_srcrpmdir %{buildroot}%{_usrsrc}/akmods/' \
+         --define 'dist %{dist}' \
+         -bs --nodeps %{_specdir}/%{name}.spec
+
+# 3. CORRECÇÃO DO LINK (v102): Garantindo path relativo para evitar erro de 'No such file'
 pushd %{buildroot}%{_usrsrc}/akmods
-# O SRPM deve ser colocado aqui (geralmente pelo kmodtool ou manualmente)
-# Criamos o link relativo puro
-ln -sf %{name}-%{version}-%{release}.src.rpm %{kmodname}.latest
+    # Localiza o SRPM gerado dinamicamente
+    SRPM_FILE=$(ls %{name}-%{version}-*.src.rpm)
+    # Cria o link .latest conforme padrão NVIDIA/VirtualBox
+    ln -sf $SRPM_FILE %{kmodname}.latest
 popd
 
+# 4. Invocação da macro de instalação oficial
 %{?akmod_install}
+
 %files
-# O kmodtool preenche esta seção automaticamente para o subpacote akmod 
+# O kmodtool gere a lista de ficheiros para o subpacote akmod
+# Incluímos manualmente o diretório e o link para garantir a posse
+%dir %{_usrsrc}/akmods
+%{_usrsrc}/akmods/%{kmodname}.latest
+%{_usrsrc}/akmods/%{name}-%{version}-*.src.rpm
 
 %changelog
 * Sun Jan 18 2026 mwprado <mwprado@github> - 1.0-1
-- Clean kmod-only package based on MadWiFi template.
+- Versão final simplificada e corrigida.
+- Implementação de pushd no %install para link simbólico resiliente.
+- Removidos ficheiros de userland para evitar erro de 'unpackaged files'.
