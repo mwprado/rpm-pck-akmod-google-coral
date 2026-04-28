@@ -10,3 +10,4 @@ index 0000000..0000000 100644
 +#else
 +	internal->class = class_create(driver_desc->module, driver_desc->name);
 +#endif
+
