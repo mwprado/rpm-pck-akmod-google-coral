@@ -3,7 +3,7 @@
 
 Name:           gasket
 Version:        1.0
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        Runtime files for Coral EdgeTPU gasket/apex kernel modules
 License:        GPL-2.0-only
 URL:            https://github.com/KyleGospo/gasket-dkms
