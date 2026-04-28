@@ -1,0 +1,17 @@
+diff --git a/src/gasket_core.c b/src/gasket_core.c
+index 0000000..0000000 100644
+--- a/src/gasket_core.c
++++ b/src/gasket_core.c
+@@ -1850,7 +1850,12 @@ static const struct file_operations gasket_file_ops = {
+ 	.owner = THIS_MODULE,
+ 	.open = gasket_open,
+ 	.release = gasket_release,
++#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
++	/*
++	 * no_llseek was removed in Linux 6.12.
++	 */
+ 	.llseek = no_llseek,
++#endif
+ 	.unlocked_ioctl = gasket_ioctl,
+ 	.compat_ioctl = gasket_ioctl,
+ 	.mmap = gasket_mmap,
