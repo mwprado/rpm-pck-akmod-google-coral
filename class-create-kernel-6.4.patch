@@ -1,0 +1,12 @@
+diff --git a/src/gasket_core.c b/src/gasket_core.c
+index 0000000..0000000 100644
+--- a/src/gasket_core.c
++++ b/src/gasket_core.c
+@@ -1849,7 +1849,13 @@ int gasket_register_device(const struct gasket_driver_desc *driver_desc)
+-	internal->class = class_create(driver_desc->module, driver_desc->name);
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0) || \
++	(defined RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 4))
++	internal->class = class_create(driver_desc->name);
++#else
++	internal->class = class_create(driver_desc->module, driver_desc->name);
++#endif
