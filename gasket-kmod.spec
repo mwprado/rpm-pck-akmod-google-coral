@@ -9,7 +9,7 @@
 
 Name:           gasket-kmod
 Version:        1.0
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Kernel modules for Google Coral EdgeTPU
 License:        GPL-2.0-only
 URL:            https://github.com/KyleGospo/gasket-dkms
