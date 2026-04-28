@@ -4,17 +4,15 @@
 
 %global debug_package %{nil}
 %global _kmodtool_zipmodules 0
-
 %global srcname gasket-dkms
 
 Name:           gasket-kmod
 Version:        1.0
-Release:        3%{?dist}
-Summary:        Kernel modules for Google Coral EdgeTPU
+Release:        1%{?dist}
+Summary:        Coral EdgeTPU gasket/apex kernel modules
 License:        GPL-2.0-only
 URL:            https://github.com/KyleGospo/gasket-dkms
 Source0:        %{url}/archive/refs/heads/main.tar.gz
-
 
 BuildRequires:  kmodtool
 BuildRequires:  gcc
@@ -32,9 +30,10 @@ ExclusiveArch:  x86_64 aarch64
     2>/dev/null)}
 
 %description
-Kernel modules for Google Coral EdgeTPU.
+Kernel modules for Coral EdgeTPU.
 
 This package builds the gasket and apex kernel modules using akmods.
+It does not use DKMS.
 
 %prep
 %{?kmodtool_check}
@@ -48,6 +47,7 @@ kmodtool --target %{_target_cpu} \
 
 %autosetup -n %{srcname}-main
 
+# Do not ship or use DKMS metadata in the akmod package.
 rm -f src/dkms.conf
 
 for kernel_version in %{?kernel_versions}; do
@@ -80,4 +80,5 @@ done
 
 %changelog
 * Tue Apr 28 2026 Moacyr Prado <you@example.com> - 1.0-1
-- Convert gasket driver from DKMS packaging to akmod packaging
+- Add akmod-only packaging for Coral EdgeTPU gasket/apex modules
+- Remove DKMS packaging path
