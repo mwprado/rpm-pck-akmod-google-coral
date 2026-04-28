@@ -58,7 +58,7 @@ fi
 
 %changelog
 * Tue Apr 28 2026 Moacyr Prado <you@example.com> - 1.0-1
-- Add akmod-only runtime package
+- Add runtime package for akmod-gasket
 - Install modules-load.d configuration and udev rule
 - Create apex system group
 - Do not provide or obsolete gasket-dkms
