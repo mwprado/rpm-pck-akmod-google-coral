@@ -14,7 +14,7 @@ Summary:        Kernel modules for Google Coral EdgeTPU
 License:        GPL-2.0-only
 URL:            https://github.com/KyleGospo/gasket-dkms
 Source0:        %{url}/archive/refs/heads/main.tar.gz
-Patch0:         gasket-kernel-6.12-no-llseek.patch
+Patch0:         fix-for-no_llseek.patch
 
 BuildRequires:  kmodtool
 BuildRequires:  gcc
