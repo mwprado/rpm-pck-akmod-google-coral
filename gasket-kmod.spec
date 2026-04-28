@@ -14,6 +14,7 @@ Summary:        Kernel modules for Google Coral EdgeTPU
 License:        GPL-2.0-only
 URL:            https://github.com/KyleGospo/gasket-dkms
 Source0:        %{url}/archive/refs/heads/main.tar.gz
+Patch0:         class-create-kernel-6.4.patch
 
 BuildRequires:  kmodtool
 BuildRequires:  gcc
@@ -45,7 +46,7 @@ kmodtool --target %{_target_cpu} \
     %{?kernels:--for-kernels "%{?kernels}"} \
     2>/dev/null
 
-%autosetup -n %{srcname}-main
+%autosetup -n %{srcname}-main -p1
 
 rm -f src/dkms.conf
 
