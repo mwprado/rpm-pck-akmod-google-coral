@@ -8,7 +8,7 @@
 
 Name:           gasket-kmod
 Version:        1.0
-Release:        1%{?dist}
+Release:        3%{?dist}
 Summary:        Coral EdgeTPU gasket/apex kernel modules
 License:        GPL-2.0-only
 URL:            https://github.com/KyleGospo/gasket-dkms
