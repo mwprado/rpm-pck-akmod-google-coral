@@ -12,8 +12,8 @@ inverted status check in UnmapAllRegions(), which currently logs successful
 unmaps as errors.
 
 ---
- driver/kernel/kernel_registers.cc | 7 +++++--
- 1 file changed, 5 insertions(+), 2 deletions(-)
+ driver/kernel/kernel_registers.cc | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
 
 diff --git a/driver/kernel/kernel_registers.cc b/driver/kernel/kernel_registers.cc
 --- a/driver/kernel/kernel_registers.cc
@@ -27,7 +27,7 @@ diff --git a/driver/kernel/kernel_registers.cc b/driver/kernel/kernel_registers.
          LOG(ERROR) << status;
        }
        region.registers = nullptr;
-@@ -100,9 +100,12 @@ Status KernelRegisters::Open() {
+@@ -100,9 +100,11 @@ Status KernelRegisters::Open() {
  
      auto statusor = MapRegion(fd_, region, read_only_);
      if (!statusor.ok()) {
