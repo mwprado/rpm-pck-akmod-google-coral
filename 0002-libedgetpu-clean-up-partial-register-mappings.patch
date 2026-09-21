@@ -1,5 +1,5 @@
 From: Moacyr Prado <mwprado@github>
-Subject: [PATCH 2/3] libedgetpu: clean up partial register mappings on open failure
+Subject: [PATCH 2/5] libedgetpu: clean up partial register mappings on open failure
 
 KernelRegisters::Open() can map several PCI BAR regions. If a later mmap()
 fails, the code closes the fd but leaves all earlier mappings active and their
