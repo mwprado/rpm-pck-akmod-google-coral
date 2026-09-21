@@ -196,6 +196,36 @@ não é instalada no sistema e não substitui o FlatBuffers do Fedora.
 O `%check` também executa um `dlopen()` real da biblioteca produzida para
 detectar símbolos não resolvidos antes de publicar o RPM.
 
+### Correções locais após auditoria
+
+Além das adaptações de build para Fedora/TensorFlow 2.16.1, o pacote aplica
+quatro correções locais de lógica encontradas no código upstream arquivado:
+
+- `libedgetpu-0001-kernel-mmu-fix-error-cleanup-and-ioctl-fallback.patch` —
+  fecha o file descriptor do dispositivo quando a partição da page table falha
+  e corrige o fallback de `GASKET_IOCTL_MAP_BUFFER_FLAGS`: `ioctl()` retorna
+  `-1` e informa `EPERM`, `ENOTTY` ou `EINVAL` por `errno`, portanto
+  comparar diretamente o retorno com `-EPERM` etc. nunca acionava o fallback;
+- `libedgetpu-0002-kernel-registers-clean-up-partial-mappings.patch` —
+  desfaz `mmap()` já realizados se um mapeamento posterior falhar e corrige
+  uma condição invertida que registrava sucesso como erro em
+  `UnmapAllRegions()`;
+- `libedgetpu-0003-kernel-events-handle-eventfd-errors.patch` — valida falhas
+  de `eventfd()`, limpa descritores já criados e rejeita índices de evento fora
+  do intervalo antes de indexar os vetores internos;
+- `libedgetpu-0004-coherent-allocator-preserve-close-errors.patch` — preserva
+  erros de `munmap()` no fechamento do coherent allocator e garante o
+  fechamento do file descriptor mesmo quando o ioctl de desativação falha.
+
+Esses patches atuam no caminho PCIe/M.2 usado neste repositório e foram
+verificados contra o commit `e35aed18fea2e2d25d98352e5a5bd357c170bd4d`.
+
+A auditoria também revisou o encerramento do delegate. O segmentation fault
+observado anteriormente apenas quando Python/LiteRT encerrava automaticamente
+não pôde ser atribuído de forma objetiva ao `libedgetpu`: a destruição
+explícita do `Interpreter` antes do delegate encerra corretamente. Por isso
+nenhum patch especulativo de lifecycle foi aplicado ao runtime.
+
 ### Correções locais do libedgetpu
 
 Além das adaptações de build necessárias para TensorFlow 2.16.1 e Fedora,
