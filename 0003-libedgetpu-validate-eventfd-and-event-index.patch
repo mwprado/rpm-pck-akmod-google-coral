@@ -11,13 +11,20 @@ fails. Also validate event_id before indexing event_fds_ and events_, avoiding
 an out-of-bounds access for an invalid interrupt identifier.
 
 ---
- driver/kernel/kernel_event_handler.cc | 21 +++++++++++++++++++++
- 1 file changed, 21 insertions(+)
+ driver/kernel/kernel_event_handler.cc | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
 
 diff --git a/driver/kernel/kernel_event_handler.cc b/driver/kernel/kernel_event_handler.cc
 --- a/driver/kernel/kernel_event_handler.cc
 +++ b/driver/kernel/kernel_event_handler.cc
-@@ -42,6 +42,20 @@ Status KernelEventHandler::Open() {
+@@ -24,6 +24,7 @@
+ #include "port/errors.h"
+ #include "port/integral_types.h"
++#include "port/logging.h"
+ #include "port/status.h"
+ #include "port/status_macros.h"
+ #include "port/std_mutex_lock.h"
+@@ -42,6 +43,20 @@ Status KernelEventHandler::Open() {
  
    for (int i = 0; i < num_events_; ++i) {
      event_fds_[i] = InitializeEventFd(i);
