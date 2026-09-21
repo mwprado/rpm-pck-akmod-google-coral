@@ -1,45 +1,45 @@
-%global debug_package %{nil}
-%global srcname gasket-dkms
+%global commit         5815ee3908a46a415aac616ac7b9aedcb98a504c
+%global shortcommit    5815ee3
 
 Name:           gasket
-Version:        1.0
-Release:        3%{?dist}
-Summary:        Runtime files for Coral EdgeTPU gasket/apex kernel modules
+Version:        1.0.18.git20240425.%{shortcommit}
+Release:        1%{?dist}
+Summary:        Runtime configuration for Google Coral Gasket/Apex modules
+
 License:        GPL-2.0-only
-URL:            https://github.com/KyleGospo/gasket-dkms
-Source0:        %{url}/archive/refs/heads/main.tar.gz
+URL:            https://github.com/google/gasket-driver
+Source0:        %{url}/archive/%{commit}/gasket-driver-%{commit}.tar.gz
 
 BuildArch:      noarch
-
 BuildRequires:  systemd-rpm-macros
 
 Requires(pre):  shadow-utils
 Requires:       akmod-gasket >= %{version}-%{release}
 
 Provides:       gasket-kmod-common = %{version}-%{release}
-
 Conflicts:      gasket-dkms
 
 %description
-Runtime configuration for the Coral EdgeTPU gasket/apex kernel modules.
+Runtime configuration for the Google Coral Gasket and Apex kernel modules.
 
-This package installs modules-load.d configuration and udev rules for the
-gasket and apex kernel modules.
-
-This package does not use DKMS. Kernel module builds are handled by akmods
-through the akmod-gasket package.
+This package installs the module loading configuration and the upstream
+Google udev rule for the Apex Edge TPU device. Kernel module builds are
+handled by akmods through the akmod-gasket package.
 
 %prep
-%autosetup -n %{srcname}-main
+%autosetup -n gasket-driver-%{commit}
 
 %build
 
 %install
-install -D -p -m 0644 gasket.conf \
-    %{buildroot}%{_modulesloaddir}/gasket.conf
-
-install -D -p -m 0644 65-apex.rules \
+install -D -p -m 0644 debian/gasket-dkms.udev \
     %{buildroot}%{_udevrulesdir}/65-apex.rules
+
+install -d %{buildroot}%{_modulesloaddir}
+cat > %{buildroot}%{_modulesloaddir}/gasket.conf <<'EOF'
+gasket
+apex
+EOF
 
 %pre
 getent group apex >/dev/null || groupadd -r apex || :
@@ -57,8 +57,9 @@ fi
 %{_udevrulesdir}/65-apex.rules
 
 %changelog
-* Tue Apr 28 2026 Moacyr Prado <you@example.com> - 1.0-1
-- Add runtime package for akmod-gasket
-- Install modules-load.d configuration and udev rule
-- Create apex system group
-- Do not provide or obsolete gasket-dkms
+* Sun Sep 20 2026 Moacyr Prado <mwprado@github> - 1.0.18.git20240425.5815ee3-1
+- Use official google/gasket-driver source
+- Provide gasket-kmod-common for akmod-gasket
+- Install upstream Apex udev permissions rule
+- Load gasket and apex modules at boot
+- Remove DKMS runtime dependency
