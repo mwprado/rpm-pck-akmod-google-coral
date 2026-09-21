@@ -6,7 +6,7 @@
 
 Name:           libedgetpu
 Version:        16.0
-Release:        1.tf%{tf_version}.git%{shortcommit}%{?dist}
+Release:        2.tf%{tf_version}.git%{shortcommit}%{?dist}
 Summary:        Userspace runtime library for Google Coral Edge TPU devices
 
 License:        Apache-2.0
@@ -24,6 +24,7 @@ ExclusiveArch:  x86_64
 BuildRequires:  gcc
 BuildRequires:  gcc-c++
 BuildRequires:  make
+BuildRequires:  python3
 BuildRequires:  binutils
 BuildRequires:  binutils-gold
 BuildRequires:  xxd
@@ -65,6 +66,33 @@ Google Coral Edge TPU through libedgetpu.
 # below overrides it explicitly, but keep this source tree internally
 # consistent as well.
 sed -i 's/-std=c++14/-std=c++17/' makefile_build/Makefile
+
+# The standalone Makefile was not updated when TensorFlow moved common.c to
+# tensorflow/lite/core/c/common.cc.  Treat the replacement as C++, otherwise
+# make looks for a source file that no longer exists in TF 2.16.1.
+python3 - <<'PY'
+from pathlib import Path
+
+p = Path("makefile_build/Makefile")
+text = p.read_text()
+
+old_c = "LIBEDGETPU_CSRCS := $(TFROOT)/tensorflow/lite/c/common.c"
+if old_c not in text:
+    raise SystemExit("expected TensorFlow common.c entry not found")
+
+text = text.replace(old_c, "LIBEDGETPU_CSRCS :=")
+
+needle = "LIBEDGETPU_CCSRCS := \\\n"
+replacement = (
+    "LIBEDGETPU_CCSRCS := \\\n"
+    "\t$(TFROOT)/tensorflow/lite/core/c/common.cc \\\n"
+)
+if needle not in text:
+    raise SystemExit("LIBEDGETPU_CCSRCS section not found")
+
+text = text.replace(needle, replacement, 1)
+p.write_text(text)
+PY
 
 
 %build
@@ -138,6 +166,10 @@ nm -D %{buildroot}%{_libdir}/libedgetpu.so.1.0 | \
 
 
 %changelog
+* Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-2.tf2.16.1.gite35aed1
+- Fix standalone Makefile for TensorFlow 2.16.1 common.cc location
+- Compile TensorFlow Lite common.cc as C++
+
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-1.tf2.16.1.gite35aed1
 - Initial Fedora package for Google Coral libedgetpu
 - Build official upstream source against TensorFlow 2.16.1
