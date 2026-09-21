@@ -1,5 +1,5 @@
 From: Moacyr Prado <mwprado@github>
-Subject: [PATCH 2/4] kernel registers: clean up partial mappings on failure
+Subject: [PATCH 2/5] kernel registers: clean up partial mappings on failure
 
 If mapping one register region succeeds and a later mmap fails,
 KernelRegisters::Open() closes the file descriptor but leaves earlier mappings
