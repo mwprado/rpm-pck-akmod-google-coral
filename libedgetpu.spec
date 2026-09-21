@@ -8,7 +8,7 @@
 
 Name:           libedgetpu
 Version:        16.0
-Release:        11.tf%{tf_version}.git%{shortcommit}%{?dist}
+Release:        12.tf%{tf_version}.git%{shortcommit}%{?dist}
 Summary:        PCIe userspace runtime library for Google Coral Edge TPU
 
 License:        Apache-2.0
@@ -40,7 +40,6 @@ BuildRequires:  make
 BuildRequires:  python3
 BuildRequires:  cmake
 BuildRequires:  binutils
-BuildRequires:  binutils-gold
 
 BuildRequires:  abseil-cpp-devel
 BuildRequires:  pkgconf-pkg-config
@@ -175,7 +174,6 @@ make %{?_smp_mflags} \
         -shared \
         -Wl,--soname,libedgetpu.so.1 \
         -Wl,--version-script=${PWD}/tflite/public/libedgetpu.lds \
-        -fuse-ld=gold \
         -Wl,--whole-archive \
         ${FLATBUFFERS_BUILD}/libflatbuffers.a \
         -Wl,--no-whole-archive \
@@ -260,6 +258,11 @@ PY
 
 
 %changelog
+* Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-12.tf2.16.1.gite35aed1
+- Drop the deprecated binutils-gold build dependency
+- Use the system default GNU linker for Fedora Rawhide compatibility
+- Keep version-script, whole-archive and SONAME linker semantics unchanged
+
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-11.tf2.16.1.gite35aed1
 - Regenerate coherent allocator patch with the exact GNU diff -u context
 - Validate coherent allocator and eventfd teardown patches with GNU patch --fuzz=0
