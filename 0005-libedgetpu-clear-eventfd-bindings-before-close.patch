@@ -21,8 +21,7 @@ attempt the close even when the ioctl fails and return the accumulated status.
 diff --git a/driver/kernel/linux/kernel_event_handler_linux.cc b/driver/kernel/linux/kernel_event_handler_linux.cc
 --- a/driver/kernel/linux/kernel_event_handler_linux.cc
 +++ b/driver/kernel/linux/kernel_event_handler_linux.cc
-@@ -54,9 +54,22 @@ FileDescriptor KernelEventHandlerLinux::InitializeEventFd(int event_id) const {
- 
+@@ -55,8 +55,21 @@
  Status KernelEventHandlerLinux::ReleaseEventFd(FileDescriptor fd,
                                                 FileDescriptor event_fd,
                                                 int event_id) const {
