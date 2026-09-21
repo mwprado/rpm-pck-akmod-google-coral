@@ -19,7 +19,7 @@ Preserve the accumulated status and always release the file descriptor.
 diff --git a/driver/kernel/kernel_coherent_allocator.cc b/driver/kernel/kernel_coherent_allocator.cc
 --- a/driver/kernel/kernel_coherent_allocator.cc
 +++ b/driver/kernel/kernel_coherent_allocator.cc
-@@ -109,11 +109,10 @@
+@@ -109,13 +109,12 @@
      status.Update(FailedPreconditionError(StringPrintf(
          "Could not disable coherent allocator size %" PRIu64 ". : %d (%s)",
          ioctl_buffer.size, fd_, strerror(errno))));
@@ -32,3 +32,5 @@ diff --git a/driver/kernel/kernel_coherent_allocator.cc b/driver/kernel/kernel_c
 -  return Status();  // OK
 +  return status;
  }
+ 
+ }  // namespace driver
