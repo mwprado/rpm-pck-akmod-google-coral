@@ -15,13 +15,13 @@ Without this cleanup the object remains in a partially-open state and leaks
 the descriptor because its destructor is defaulted.
 
 ---
- driver/kernel/kernel_mmu_mapper.cc | 19 ++++++++++++++-----
- 1 file changed, 14 insertions(+), 5 deletions(-)
+ driver/kernel/kernel_mmu_mapper.cc | 17 ++++++++++++-----
+ 1 file changed, 12 insertions(+), 5 deletions(-)
 
 diff --git a/driver/kernel/kernel_mmu_mapper.cc b/driver/kernel/kernel_mmu_mapper.cc
 --- a/driver/kernel/kernel_mmu_mapper.cc
 +++ b/driver/kernel/kernel_mmu_mapper.cc
-@@ -14,6 +14,7 @@
+@@ -16,6 +16,7 @@
  
  #include <fcntl.h>
  
@@ -29,7 +29,7 @@ diff --git a/driver/kernel/kernel_mmu_mapper.cc b/driver/kernel/kernel_mmu_mappe
  #include <sys/stat.h>
  #include <sys/types.h>
  
-@@ -50,8 +51,13 @@ Status KernelMmuMapper::Open(int num_simple_page_table_entries_requested) {
+@@ -57,8 +58,11 @@ Status KernelMmuMapper::Open(int num_simple_page_table_entries_requested) {
    ioctl_buffer.size = num_simple_page_table_entries_requested;
  
    if (ioctl(fd_, GASKET_IOCTL_PARTITION_PAGE_TABLE, &ioctl_buffer) != 0) {
@@ -42,7 +42,7 @@ diff --git a/driver/kernel/kernel_mmu_mapper.cc b/driver/kernel/kernel_mmu_mappe
    }
  
    return Status();  // OK
-@@ -100,12 +106,15 @@ Status KernelMmuMapper::DoMap(const void *buffer, int num_pages,
+@@ -112,12 +116,15 @@ Status KernelMmuMapper::DoMap(const void *buffer, int num_pages,
    int ioctl_retval = 0;
    if (map_flags_supported_) {
      ioctl_retval = ioctl(fd_, GASKET_IOCTL_MAP_BUFFER_FLAGS, &buffer_to_map);
