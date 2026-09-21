@@ -84,7 +84,9 @@ gasket-kmod.spec
                |
                +--> 65-apex.rules
                +--> modules-load.d/gasket.conf
-               +--> grupo apex
+               +--> sysusers.d/gasket.conf
+                       |
+                       +--> grupo apex
 ```
 
 O pacote `akmod-gasket` mantém a fonte necessária para que o `akmods`
@@ -94,6 +96,26 @@ O subpacote `gasket-kmod-common` é produzido pelo **mesmo SRPM**. Isso é
 intencional: versões anteriores usavam um pacote common separado, o que
 criava problemas de resolução de dependências durante builds COPR e
 transações rpm-ostree.
+
+O grupo de acesso ao dispositivo também é declarado pelo pacote usando
+`systemd-sysusers`, em vez de chamar `groupadd` diretamente. O arquivo
+fonte `apex.sysusers` contém:
+
+```text
+g apex - - -
+```
+
+e é instalado como:
+
+```text
+/usr/lib/sysusers.d/gasket.conf
+```
+
+O GID fica como `-`, portanto é alocado dinamicamente pelo sistema. O spec
+usa `%sysusers_create_package` no `%pre` do `gasket-kmod-common` para
+materializar essa definição sem manipular diretamente `/etc/group`. Isso
+também preserva a precedência normal de overrides administrativos em
+`/etc/sysusers.d/`.
 
 A regra udev oficial instala o dispositivo com:
 
@@ -215,70 +237,92 @@ um character device `/dev/apex_0`.
 
 ## O grupo apex no Silverblue
 
-Este foi um dos pontos menos óbvios durante a validação.
-
-A regra udev dá acesso ao dispositivo ao grupo `apex`:
+A regra udev do driver dá acesso ao dispositivo ao grupo `apex`:
 
 ```text
 crw-rw---- root apex ... /dev/apex_0
 ```
 
-Portanto o usuário que executará inferências precisa pertencer a esse grupo.
+A primeira versão deste pacote criava esse grupo diretamente no scriptlet RPM:
 
-Em uma instalação Fedora tradicional, normalmente basta:
+```bash
+groupadd -r apex
+```
+
+Essa abordagem funcionava em Fedora tradicional, mas mostrou uma dificuldade
+no Silverblue: grupos do sistema podem aparecer por meio dos bancos fornecidos
+pela imagem em `/usr/lib/group`, enquanto alterações administrativas locais
+ficam em `/etc/group`. A mistura das duas origens tornou operações com
+`groupadd`, `usermod` e `grpck` menos previsíveis durante os testes.
+
+A implementação atual evita isso. O pacote contém uma definição declarativa:
+
+```text
+# apex.sysusers
+g apex - - -
+```
+
+que é instalada em:
+
+```text
+/usr/lib/sysusers.d/gasket.conf
+```
+
+e processada por `systemd-sysusers` através de
+`%sysusers_create_package`.
+
+Com isso:
+
+- o pacote não edita diretamente `/etc/group`;
+- o GID não é fixado no spec;
+- a criação do grupo passa a seguir o mecanismo nativo do systemd;
+- configurações locais podem usar `/etc/sysusers.d/` sem alterar arquivos
+  fornecidos pelo RPM.
+
+### Verificação
+
+Depois da instalação/reboot:
+
+```bash
+getent group apex
+ls -l /dev/apex_0
+```
+
+O esperado é algo equivalente a:
+
+```text
+apex:x:<gid>:
+crw-rw---- root apex ... /dev/apex_0
+```
+
+O número do GID pode variar e não deve ser codificado em scripts locais.
+
+### Associação do usuário ao grupo
+
+A criação do grupo pelo pacote e a autorização de um usuário humano são
+problemas diferentes. O RPM cria `apex`, mas deliberadamente não decide quais
+usuários locais devem acessar o Edge TPU.
+
+Em Fedora tradicional, normalmente basta:
 
 ```bash
 sudo usermod -aG apex "$USER"
 ```
 
-No Silverblue, porém, contas e grupos do sistema podem estar distribuídos entre
-os bancos imutáveis em `/usr/lib/group` e os bancos locais graváveis em
-`/etc/group`.
+Depois é necessário encerrar a sessão e entrar novamente.
 
-Durante o teste deste projeto ocorreu a seguinte situação:
-
-```text
-getent group apex
-apex:x:<gid>:
-```
-
-mas o usuário ainda não aparecia como membro do grupo. Tentativas de copiar ou
-criar entradas manualmente sem verificar o estado anterior também podem
-produzir entradas `apex` duplicadas em `/etc/group`, fazendo ferramentas
-como `usermod` recusarem a alteração.
-
-### Diagnóstico
-
-Primeiro verifique as três visões:
+No Silverblue, se `usermod` encontrar conflito por causa da separação entre
+os bancos de grupos do sistema e os locais, prefira uma associação declarativa
+local em vez de duplicar manualmente a entrada `apex` em `/etc/group`:
 
 ```bash
-getent group apex
-grep '^apex:' /etc/group /usr/lib/group 2>/dev/null
-id
+printf 'm %s apex\n' "$USER" | sudo tee /etc/sysusers.d/90-apex-local.conf
+sudo systemd-sysusers /etc/sysusers.d/90-apex-local.conf
 ```
 
-O GID não deve ser fixado na documentação: use o GID retornado pelo sistema.
+A diretiva `m` significa "adicionar este usuário como membro deste grupo".
 
-### Ajuste local
-
-Se o grupo existe no banco fornecido pelo sistema, mas não há uma entrada local
-adequada para manter a associação do usuário, edite cuidadosamente
-`/etc/group` com:
-
-```bash
-sudo vigr
-```
-
-e mantenha **uma única entrada local** para `apex`, usando o GID já existente:
-
-```text
-apex:x:<gid>:seu_usuario
-```
-
-Não crie várias entradas `apex` em `/etc/group`.
-
-Depois encerre a sessão gráfica/SSH e entre novamente. Para um teste imediato
-em shell também é possível usar:
+Depois faça novo login ou, para um teste imediato no shell:
 
 ```bash
 newgrp apex
@@ -292,15 +336,33 @@ test -r /dev/apex_0 && echo READ-OK
 test -w /dev/apex_0 && echo WRITE-OK
 ```
 
-### Sobre grpck no Silverblue
+### Sobre `/usr/lib/group`, `/etc/group` e `grpck`
 
-`grpck` pode listar vários grupos que existem em um dos bancos do sistema mas
-não aparecem da mesma forma no outro. Em Silverblue isso não significa
-necessariamente corrupção.
+Durante os testes do Silverblue, o grupo `apex` podia ser visível por
+`getent` mesmo quando não havia uma entrada equivalente em `/etc/group`.
+Isso é importante porque `getent` consulta a visão NSS completa do sistema,
+não apenas um arquivo.
 
-Evite remover em massa grupos sugeridos pelo `grpck` apenas para silenciar os
-avisos. O objetivo aqui é corrigir somente a entrada `apex`, preservando o
-modelo de contas/grupos do sistema imutável.
+Por isso, para diagnóstico, compare:
+
+```bash
+getent group apex
+grep '^apex:' /etc/group /usr/lib/group 2>/dev/null
+id
+```
+
+Não copie automaticamente uma entrada de `/usr/lib/group` para
+`/etc/group`: isso pode criar nomes duplicados e fazer ferramentas como
+`usermod` recusarem a operação.
+
+Da mesma forma, `grpck` pode emitir avisos ao enxergar bancos distribuídos
+entre a imagem imutável e `/etc`. Não remova grupos em massa apenas para
+eliminar esses avisos. A definição de fornecedor deve permanecer em
+`/usr/lib/sysusers.d/gasket.conf`; personalizações locais pertencem a
+`/etc/sysusers.d/`.
+
+Essa separação é a razão para o pacote ter migrado de `groupadd` para
+`systemd-sysusers`.
 
 ---
 
