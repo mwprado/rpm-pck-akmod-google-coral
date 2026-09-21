@@ -18,7 +18,7 @@
 
 Name:           %{kmod_name}-kmod
 Version:        1.0.18.git20240425.%{shortcommit}
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        Google Coral Gasket and Apex kernel modules
 
 License:        GPL-2.0-only
@@ -26,6 +26,8 @@ URL:            https://github.com/google/gasket-driver
 
 # Official Google source only.
 Source0:        %{url}/archive/%{commit}/gasket-driver-%{commit}.tar.gz
+# Declarative system group for the Apex udev permissions rule.
+Source1:        https://raw.githubusercontent.com/mwprado/rpm-pck-akmod-google-coral/c88873bed10126c855e7a275210f72dd087819cf/apex.sysusers#/apex.sysusers
 
 # Compatibility patches from KyleGospo/gasket-dkms.
 Patch0:         https://github.com/KyleGospo/gasket-dkms/commit/697d5d228bf49d1fdf88792d7e85ee08a20065b0.patch
@@ -76,7 +78,7 @@ compatibility fixes required for current Fedora kernels.
 %package common
 Summary:        Common runtime files for Google Coral Gasket/Apex modules
 BuildArch:      noarch
-Requires(pre):  shadow-utils
+Requires(pre):  systemd
 Conflicts:      gasket-dkms
 
 %description common
@@ -84,8 +86,8 @@ Common runtime configuration for the Google Coral Gasket and Apex
 kernel modules.
 
 This package supplies the gasket-kmod-common dependency required by
-akmod-gasket and installs the Apex udev rule and modules-load.d
-configuration.
+akmod-gasket and installs the Apex udev rule, modules-load.d configuration
+and a declarative systemd-sysusers definition for the apex group.
 
 
 %prep
@@ -148,6 +150,11 @@ done
 install -D -p -m 0644 debian/gasket-dkms.udev \
     %{buildroot}%{_udevrulesdir}/65-apex.rules
 
+# Declare the group referenced by the upstream udev rule.  Keep the GID
+# dynamic so Fedora/Silverblue can allocate it consistently.
+install -D -p -m 0644 %{SOURCE1} \
+    %{buildroot}%{_sysusersdir}/gasket.conf
+
 install -d %{buildroot}%{_modulesloaddir}
 cat > %{buildroot}%{_modulesloaddir}/gasket.conf <<'EOF'
 gasket
@@ -159,7 +166,10 @@ EOF
 
 
 %pre common
-getent group apex >/dev/null || groupadd -r apex || :
+# Materialize the declarative group before package files are installed.
+# This avoids direct groupadd manipulation and works with local admin
+# overrides through the normal sysusers.d precedence rules.
+%sysusers_create_package gasket %{SOURCE1}
 
 
 %post common
@@ -173,10 +183,16 @@ fi
 %license LICENSE
 %doc README.md
 %{_modulesloaddir}/gasket.conf
+%{_sysusersdir}/gasket.conf
 %{_udevrulesdir}/65-apex.rules
 
 
 %changelog
+* Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 1.0.18.git20240425.5815ee3-3
+- Replace direct groupadd with declarative systemd-sysusers configuration
+- Install the apex group definition through gasket-kmod-common
+- Keep the apex GID dynamically allocated for Fedora and Silverblue
+
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 1.0.18.git20240425.5815ee3-2
 - Build gasket-kmod-common in the same SRPM as akmod-gasket
 - Make the akmod package self-contained for COPR and rpm-ostree
