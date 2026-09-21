@@ -3,10 +3,12 @@
 %global commit      e35aed18fea2e2d25d98352e5a5bd357c170bd4d
 %global shortcommit e35aed1
 %global tf_version  2.16.1
+%global flatbuffers_commit 7d6d99c6befa635780a4e944d37ebfd58e68a108
+%global flatbuffers_version 23.5.26
 
 Name:           libedgetpu
 Version:        16.0
-Release:        3.tf%{tf_version}.git%{shortcommit}%{?dist}
+Release:        4.tf%{tf_version}.git%{shortcommit}%{?dist}
 Summary:        PCIe userspace runtime library for Google Coral Edge TPU
 
 License:        Apache-2.0
@@ -18,17 +20,21 @@ Source0:        %{url}/archive/%{commit}/libedgetpu-%{commit}.tar.gz
 # The native Makefile build needs the matching TensorFlow source tree.
 Source1:        https://github.com/tensorflow/tensorflow/archive/refs/tags/v%{tf_version}.tar.gz#/tensorflow-%{tf_version}.tar.gz
 
+# TensorFlow 2.16.1 pins FlatBuffers 23.5.26. Fedora 44 ships a newer
+# incompatible major version, so use the exact TensorFlow-pinned source as a
+# private build dependency rather than replacing Fedora's system FlatBuffers.
+Source2:        https://github.com/google/flatbuffers/archive/%{flatbuffers_commit}/flatbuffers-%{flatbuffers_commit}.tar.gz
+
 ExclusiveArch:  x86_64
 
 BuildRequires:  gcc
 BuildRequires:  gcc-c++
 BuildRequires:  make
 BuildRequires:  python3
+BuildRequires:  cmake
 BuildRequires:  binutils
 BuildRequires:  binutils-gold
 
-BuildRequires:  flatbuffers-devel
-BuildRequires:  flatbuffers-compiler
 BuildRequires:  abseil-cpp-devel
 BuildRequires:  pkgconf-pkg-config
 
@@ -54,7 +60,7 @@ Google Coral Edge TPU through libedgetpu.
 
 
 %prep
-%setup -q -n libedgetpu-%{commit} -a 1
+%setup -q -n libedgetpu-%{commit} -a 1 -a 2
 
 python3 - <<'PY'
 from pathlib import Path
@@ -118,6 +124,25 @@ PY
 
 %build
 TFROOT="${PWD}/tensorflow-%{tf_version}"
+FLATBUFFERS_SRC="${PWD}/flatbuffers-%{flatbuffers_commit}"
+FLATBUFFERS_BUILD="${PWD}/_flatbuffers"
+
+# TensorFlow 2.16.1 generated headers require FlatBuffers 23.x exactly.
+# Build the TensorFlow-pinned 23.5.26 privately for libedgetpu.  Nothing from
+# this private FlatBuffers build is installed into the resulting RPM.
+cmake \
+    -S "${FLATBUFFERS_SRC}" \
+    -B "${FLATBUFFERS_BUILD}" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+    -DFLATBUFFERS_BUILD_TESTS=OFF \
+    -DFLATBUFFERS_BUILD_FLATC=ON \
+    -DFLATBUFFERS_BUILD_FLATLIB=ON \
+    -DFLATBUFFERS_BUILD_SHAREDLIB=OFF
+
+cmake --build "${FLATBUFFERS_BUILD}" \
+    --parallel %{?_smp_build_ncpus} \
+    --target flatc flatbuffers
 
 # Fedora's modern Abseil is split into many libraries.  Let pkg-config provide
 # the complete transitive link set rather than using the historical hard-coded
@@ -132,14 +157,15 @@ make %{?_smp_mflags} \
     -f makefile_build/Makefile \
     TFROOT="${TFROOT}" \
     LIBEDGETPU_CFLAGS="%{build_cflags} -fPIC -Wall -std=c99" \
-    LIBEDGETPU_CXXFLAGS="%{build_cxxflags} -fPIC -Wall -std=c++17 -DDARWINN_PORT_DEFAULT" \
+    FLATC="${FLATBUFFERS_BUILD}/flatc" \
+    LIBEDGETPU_CXXFLAGS="%{build_cxxflags} -I${FLATBUFFERS_SRC}/include -fPIC -Wall -std=c++17 -DDARWINN_PORT_DEFAULT" \
     LIBEDGETPU_LDFLAGS="%{build_ldflags} \
         -Wl,-Map=${PWD}/out/output.map \
         -shared \
         -Wl,--soname,libedgetpu.so.1 \
         -Wl,--version-script=${PWD}/tflite/public/libedgetpu.lds \
         -fuse-ld=gold \
-        -lflatbuffers \
+        ${FLATBUFFERS_BUILD}/libflatbuffers.a \
         ${ABSL_LIBS}" \
     libedgetpu-throttled
 
@@ -186,6 +212,11 @@ nm -D %{buildroot}%{_libdir}/libedgetpu.so.1.0 | \
 
 
 %changelog
+* Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-4.tf2.16.1.gite35aed1
+- Build privately against TensorFlow-pinned FlatBuffers 23.5.26
+- Avoid Fedora 44 FlatBuffers 25 header incompatibility
+- Keep the private FlatBuffers build out of the installed runtime
+
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-3.tf2.16.1.gite35aed1
 - Build a PCIe/M.2-only runtime for gasket/apex devices
 - Remove obsolete USB/DFU sources and the libusb dependency
