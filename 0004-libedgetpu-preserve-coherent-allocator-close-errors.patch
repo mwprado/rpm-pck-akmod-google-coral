@@ -19,9 +19,7 @@ Preserve the accumulated status and always release the file descriptor.
 diff --git a/driver/kernel/kernel_coherent_allocator.cc b/driver/kernel/kernel_coherent_allocator.cc
 --- a/driver/kernel/kernel_coherent_allocator.cc
 +++ b/driver/kernel/kernel_coherent_allocator.cc
-@@ -107,17 +107,16 @@ Status KernelCoherentAllocator::DoClose(char *mem_base, size_t size_bytes) {
-   ioctl_buffer.size = size_bytes;
-   if (ioctl(fd_, GASKET_IOCTL_CONFIG_COHERENT_ALLOCATOR, &ioctl_buffer) != 0) {
+@@ -109,11 +109,10 @@
      status.Update(FailedPreconditionError(StringPrintf(
          "Could not disable coherent allocator size %" PRIu64 ". : %d (%s)",
          ioctl_buffer.size, fd_, strerror(errno))));
@@ -34,7 +32,3 @@ diff --git a/driver/kernel/kernel_coherent_allocator.cc b/driver/kernel/kernel_c
 -  return Status();  // OK
 +  return status;
  }
- 
- }  // namespace driver
- }  // namespace darwinn
- }  // namespace platforms
