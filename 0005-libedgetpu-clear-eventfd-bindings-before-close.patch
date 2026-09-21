@@ -15,13 +15,13 @@ Clear the interrupt/eventfd association first, then close the eventfd. Always
 attempt the close even when the ioctl fails and return the accumulated status.
 
 ---
- driver/kernel/linux/kernel_event_handler_linux.cc | 18 ++++++++++++++++--
- 1 file changed, 16 insertions(+), 2 deletions(-)
+ driver/kernel/linux/kernel_event_handler_linux.cc | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
 
 diff --git a/driver/kernel/linux/kernel_event_handler_linux.cc b/driver/kernel/linux/kernel_event_handler_linux.cc
 --- a/driver/kernel/linux/kernel_event_handler_linux.cc
 +++ b/driver/kernel/linux/kernel_event_handler_linux.cc
-@@ -45,8 +45,22 @@ FileDescriptor KernelEventHandlerLinux::InitializeEventFd(int event_id) const {
+@@ -54,9 +54,22 @@ FileDescriptor KernelEventHandlerLinux::InitializeEventFd(int event_id) const {
  
  Status KernelEventHandlerLinux::ReleaseEventFd(FileDescriptor fd,
                                                 FileDescriptor event_fd,
