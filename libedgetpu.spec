@@ -25,6 +25,12 @@ Source1:        https://github.com/tensorflow/tensorflow/archive/refs/tags/v%{tf
 # private build dependency rather than replacing Fedora's system FlatBuffers.
 Source2:        https://github.com/google/flatbuffers/archive/%{flatbuffers_commit}/flatbuffers-%{flatbuffers_commit}.tar.gz
 
+# Local correctness fixes found while auditing the archived libedgetpu code.
+Patch0:         libedgetpu-0001-kernel-mmu-fix-error-cleanup-and-ioctl-fallback.patch
+Patch1:         libedgetpu-0002-kernel-registers-clean-up-partial-mappings.patch
+Patch2:         libedgetpu-0003-kernel-events-handle-eventfd-errors.patch
+Patch3:         libedgetpu-0004-coherent-allocator-preserve-close-errors.patch
+
 # Local correctness fixes found while auditing the archived libedgetpu source.
 Patch0:         0001-libedgetpu-fix-mmu-ioctl-fallback-and-open-cleanup.patch
 Patch1:         0002-libedgetpu-clean-up-partial-register-mappings.patch
@@ -66,6 +72,12 @@ Google Coral Edge TPU through libedgetpu.
 
 %prep
 %setup -q -n libedgetpu-%{commit} -a 1 -a 2
+
+# Apply local runtime correctness fixes before adapting the standalone build.
+%patch -P 0 -p1
+%patch -P 1 -p1
+%patch -P 2 -p1
+%patch -P 3 -p1
 %autopatch -p1
 
 python3 - <<'PY'
@@ -229,6 +241,13 @@ PY
 
 
 %changelog
+* Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-6.tf2.16.1.gite35aed1
+- Close the MMU device fd when page-table partitioning fails
+- Fix MAP_BUFFER_FLAGS fallback to inspect errno from ioctl()
+- Clean up partial register mmaps and correctly report unmap failures
+- Validate eventfd creation and event indexes, with failure cleanup
+- Preserve coherent allocator unmap errors and always release its device fd
+
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-6.tf2.16.1.gite35aed1
 - Fix Linux ioctl fallback for legacy Gasket map-buffer support
 - Close MMU device fd when page-table partitioning fails
