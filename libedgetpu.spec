@@ -8,7 +8,7 @@
 
 Name:           libedgetpu
 Version:        16.0
-Release:        5.tf%{tf_version}.git%{shortcommit}%{?dist}
+Release:        6.tf%{tf_version}.git%{shortcommit}%{?dist}
 Summary:        PCIe userspace runtime library for Google Coral Edge TPU
 
 License:        Apache-2.0
@@ -24,6 +24,11 @@ Source1:        https://github.com/tensorflow/tensorflow/archive/refs/tags/v%{tf
 # incompatible major version, so use the exact TensorFlow-pinned source as a
 # private build dependency rather than replacing Fedora's system FlatBuffers.
 Source2:        https://github.com/google/flatbuffers/archive/%{flatbuffers_commit}/flatbuffers-%{flatbuffers_commit}.tar.gz
+
+# Local correctness fixes found while auditing the archived libedgetpu source.
+Patch0:         0001-libedgetpu-fix-mmu-ioctl-fallback-and-open-cleanup.patch
+Patch1:         0002-libedgetpu-clean-up-partial-register-mappings.patch
+Patch2:         0003-libedgetpu-validate-eventfd-and-event-index.patch
 
 ExclusiveArch:  x86_64
 
@@ -61,6 +66,7 @@ Google Coral Edge TPU through libedgetpu.
 
 %prep
 %setup -q -n libedgetpu-%{commit} -a 1 -a 2
+%autopatch -p1
 
 python3 - <<'PY'
 from pathlib import Path
@@ -223,6 +229,13 @@ PY
 
 
 %changelog
+* Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-6.tf2.16.1.gite35aed1
+- Fix Linux ioctl fallback for legacy Gasket map-buffer support
+- Close MMU device fd when page-table partitioning fails
+- Clean up partial PCI register mappings when a later mmap fails
+- Fix inverted unmap error logging and Read32 alignment diagnostic
+- Validate eventfd creation and event indices before registration
+
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-5.tf2.16.1.gite35aed1
 - Force inclusion of the private FlatBuffers static archive at link time
 - Fix unresolved flatbuffers::ClassicLocale runtime symbol
