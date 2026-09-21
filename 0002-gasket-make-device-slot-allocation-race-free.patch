@@ -12,13 +12,13 @@ Reserve the slot while still holding internal_desc->mutex. Allocate and
 initialize the object before reserving it, and free it if reservation fails.
 
 ---
- src/gasket_core.c | 28 +++++++++++++++++-----------
- 1 file changed, 17 insertions(+), 11 deletions(-)
+ src/gasket_core.c | 30 +++++++++++++++++++-----------
+ 1 file changed, 19 insertions(+), 11 deletions(-)
 
 diff --git a/src/gasket_core.c b/src/gasket_core.c
 --- a/src/gasket_core.c
 +++ b/src/gasket_core.c
-@@ -149,9 +149,10 @@ static int gasket_owned_by_current_tgid(struct gasket_cdev_info *info)
+@@ -149,12 +149,13 @@ static int gasket_owned_by_current_tgid(struct gasket_cdev_info *info)
  }
  
  /*
@@ -45,7 +45,7 @@ diff --git a/src/gasket_core.c b/src/gasket_core.c
  	mutex_unlock(&internal_desc->mutex);
  	return i;
  }
-@@ -202,24 +206,26 @@ static int gasket_alloc_dev(struct gasket_internal_desc *internal_desc,
+@@ -202,22 +206,26 @@ static int gasket_alloc_dev(struct gasket_internal_desc *internal_desc,
  
  	*pdev = NULL;
  
