@@ -196,6 +196,31 @@ não é instalada no sistema e não substitui o FlatBuffers do Fedora.
 O `%check` também executa um `dlopen()` real da biblioteca produzida para
 detectar símbolos não resolvidos antes de publicar o RPM.
 
+### Correções locais do libedgetpu
+
+Além das adaptações de build necessárias para TensorFlow 2.16.1 e Fedora,
+este repositório mantém três patches de correção encontrados durante a
+auditoria do código upstream arquivado:
+
+- `0001-libedgetpu-fix-mmu-ioctl-fallback-and-open-cleanup.patch` — corrige
+  o fallback de `GASKET_IOCTL_MAP_BUFFER_FLAGS` para o ioctl legado. Em Linux,
+  `ioctl()` retorna `-1` e informa o erro em `errno`; o upstream comparava
+  diretamente o retorno com `-EPERM`, `-ENOTTY` e `-EINVAL`, portanto o
+  fallback nunca era ativado. O mesmo patch também fecha o descritor do
+  dispositivo se a partição da page table falhar durante `Open()`;
+- `0002-libedgetpu-clean-up-partial-register-mappings.patch` — desfaz
+  mappings PCI já criados se um `mmap()` posterior falhar, evitando deixar
+  regiões parcialmente mapeadas. Também corrige a condição invertida que
+  registrava sucesso de `munmap()` como erro e corrige a mensagem de
+  alinhamento de `Read32()`;
+- `0003-libedgetpu-validate-eventfd-and-event-index.patch` — detecta falha
+  na criação de `eventfd`, limpa os descritores já criados e valida o índice
+  do evento antes de acessar os vetores internos.
+
+Esses patches alteram apenas o runtime userspace; não modificam a ABI pública
+`libedgetpu.so.1`. Eles são aplicados pelo `libedgetpu.spec` antes das
+adaptações do Makefile standalone.
+
 ---
 
 ## coral-smi.spec
