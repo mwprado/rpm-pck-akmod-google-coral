@@ -1,5 +1,5 @@
 From: Moacyr Prado <mwprado@github>
-Subject: [PATCH 1/4] kernel mmu: fix failed-open cleanup and ioctl fallback
+Subject: [PATCH 1/5] kernel mmu: fix failed-open cleanup and ioctl fallback
 
 KernelMmuMapper::Open() leaves fd_ open when page-table partitioning fails.
 The object then reports "Device already open" on a later retry and leaks the
