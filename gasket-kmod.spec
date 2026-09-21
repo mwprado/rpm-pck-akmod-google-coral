@@ -7,7 +7,11 @@
 %global commit         5815ee3908a46a415aac616ac7b9aedcb98a504c
 %global shortcommit    5815ee3
 
-%if 0%{?fedora}
+# COPR builds both Fedora and EPEL as akmods.  Without this on EL,
+# kmodtool falls back to build-system kernel discovery and requires
+# --repo plus buildsys-build-<repo>-kerneldevpkgs, which is not available
+# in a normal COPR EPEL chroot.
+%if 0%{?fedora} || 0%{?rhel}
 %global buildforkernels akmod
 %endif
 
@@ -18,7 +22,7 @@
 
 Name:           %{kmod_name}-kmod
 Version:        1.0.18.git20240425.%{shortcommit}
-Release:        5%{?dist}
+Release:        6%{?dist}
 Summary:        Google Coral Gasket and Apex kernel modules
 
 License:        GPL-2.0-only
@@ -193,6 +197,11 @@ fi
 
 
 %changelog
+* Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 1.0.18.git20240425.5815ee3-6
+- Generate akmod packages on EPEL/RHEL as well as Fedora
+- Avoid kmodtool build-system kernel discovery and its --repo requirement
+- Keep COPR EPEL builds independent of buildsys-build-*-kerneldevpkgs helpers
+
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 1.0.18.git20240425.5815ee3-5
 - Fix malformed unified-diff metadata in the device-slot race patch
 - Revalidate local Gasket patch hunk counts before akmod build
