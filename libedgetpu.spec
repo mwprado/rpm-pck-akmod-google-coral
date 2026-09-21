@@ -8,7 +8,7 @@
 
 Name:           libedgetpu
 Version:        16.0
-Release:        10.tf%{tf_version}.git%{shortcommit}%{?dist}
+Release:        11.tf%{tf_version}.git%{shortcommit}%{?dist}
 Summary:        PCIe userspace runtime library for Google Coral Edge TPU
 
 License:        Apache-2.0
@@ -260,6 +260,10 @@ PY
 
 
 %changelog
+* Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-11.tf2.16.1.gite35aed1
+- Regenerate coherent allocator patch with the exact GNU diff -u context
+- Validate coherent allocator and eventfd teardown patches with GNU patch --fuzz=0
+
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-10.tf2.16.1.gite35aed1
 - Regenerate audit patches from exact upstream source with diff -u
 - Simplify register cleanup patch to functional changes only
