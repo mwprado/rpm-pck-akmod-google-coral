@@ -3,7 +3,7 @@
 
 Name:           gasket
 Version:        1.0.18.git20240425.%{shortcommit}
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Runtime configuration for Google Coral Gasket/Apex modules
 
 License:        GPL-2.0-only
@@ -55,6 +55,10 @@ fi
 %{_udevrulesdir}/65-apex.rules
 
 %changelog
+* Sun Sep 20 2026 Moacyr Prado <mwprado@github> - 1.0.18.git20240425.5815ee3-2
+- Remove reverse dependency on akmod-gasket
+- Rebuild common package for COPR metadata refresh
+
 * Sun Sep 20 2026 Moacyr Prado <mwprado@github> - 1.0.18.git20240425.5815ee3-1
 - Use official google/gasket-driver source
 - Provide gasket-kmod-common for akmod-gasket
