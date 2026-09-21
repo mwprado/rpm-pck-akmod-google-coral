@@ -1,5 +1,5 @@
 From: Moacyr Prado <mwprado@github>
-Subject: [PATCH 3/4] kernel events: validate eventfd creation and event ids
+Subject: [PATCH 3/5] kernel events: validate eventfd creation and event ids
 
 KernelEventHandler::Open() assumes every platform event descriptor is created
 successfully. On Linux eventfd() can fail and return -1, but the handler still
