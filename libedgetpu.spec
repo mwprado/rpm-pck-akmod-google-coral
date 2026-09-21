@@ -8,7 +8,7 @@
 
 Name:           libedgetpu
 Version:        16.0
-Release:        7.tf%{tf_version}.git%{shortcommit}%{?dist}
+Release:        8.tf%{tf_version}.git%{shortcommit}%{?dist}
 Summary:        PCIe userspace runtime library for Google Coral Edge TPU
 
 License:        Apache-2.0
@@ -25,17 +25,12 @@ Source1:        https://github.com/tensorflow/tensorflow/archive/refs/tags/v%{tf
 # private build dependency rather than replacing Fedora's system FlatBuffers.
 Source2:        https://github.com/google/flatbuffers/archive/%{flatbuffers_commit}/flatbuffers-%{flatbuffers_commit}.tar.gz
 
-# Local correctness fixes found while auditing the archived libedgetpu code.
-Patch0:         libedgetpu-0001-kernel-mmu-fix-error-cleanup-and-ioctl-fallback.patch
-Patch1:         libedgetpu-0002-kernel-registers-clean-up-partial-mappings.patch
-Patch2:         libedgetpu-0003-kernel-events-handle-eventfd-errors.patch
-Patch3:         libedgetpu-0004-coherent-allocator-preserve-close-errors.patch
-Patch4:         libedgetpu-0005-kernel-events-clear-kernel-eventfd-bindings.patch
-
 # Local correctness fixes found while auditing the archived libedgetpu source.
 Patch0:         0001-libedgetpu-fix-mmu-ioctl-fallback-and-open-cleanup.patch
 Patch1:         0002-libedgetpu-clean-up-partial-register-mappings.patch
 Patch2:         0003-libedgetpu-validate-eventfd-and-event-index.patch
+Patch3:         0004-libedgetpu-preserve-coherent-allocator-close-errors.patch
+Patch4:         0005-libedgetpu-clear-eventfd-bindings-before-close.patch
 
 ExclusiveArch:  x86_64
 
@@ -74,12 +69,8 @@ Google Coral Edge TPU through libedgetpu.
 %prep
 %setup -q -n libedgetpu-%{commit} -a 1 -a 2
 
-# Apply local runtime correctness fixes before adapting the standalone build.
-%patch -P 0 -p1
-%patch -P 1 -p1
-%patch -P 2 -p1
-%patch -P 3 -p1
-%patch -P 4 -p1
+# Apply the local correctness fixes in Patch0..Patch4 order before adapting
+# the standalone build for modern TensorFlow/Fedora.
 %autopatch -p1
 
 python3 - <<'PY'
@@ -269,6 +260,11 @@ PY
 
 
 %changelog
+* Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-8.tf2.16.1.gite35aed1
+- Consolidate the libedgetpu audit into one Patch0..Patch4 series
+- Remove duplicate Patch tags and duplicate patch application in %%prep
+- Keep the stricter EPERM handling and Gasket eventfd cleanup
+
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-7.tf2.16.1.gite35aed1
 - Clear Gasket eventfd bindings before closing userspace eventfds
 - Do not treat EPERM as an unsupported MAP_BUFFER_FLAGS ioctl
@@ -280,13 +276,6 @@ PY
 - Clean up partial register mmaps and correctly report unmap failures
 - Validate eventfd creation and event indexes, with failure cleanup
 - Preserve coherent allocator unmap errors and always release its device fd
-
-* Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-6.tf2.16.1.gite35aed1
-- Fix Linux ioctl fallback for legacy Gasket map-buffer support
-- Close MMU device fd when page-table partitioning fails
-- Clean up partial PCI register mappings when a later mmap fails
-- Fix inverted unmap error logging and Read32 alignment diagnostic
-- Validate eventfd creation and event indices before registration
 
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-5.tf2.16.1.gite35aed1
 - Force inclusion of the private FlatBuffers static archive at link time
