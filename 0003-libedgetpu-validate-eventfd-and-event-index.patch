@@ -1,0 +1,56 @@
+From: Moacyr Prado <mwprado@github>
+Subject: [PATCH 3/3] libedgetpu: validate eventfd initialization and event index
+
+KernelEventHandler::Open() treated eventfd creation failures as success and
+could leave a partially initialized handler containing invalid descriptors.
+Later RegisterEvent() would only fail indirectly when attempting to register
+the invalid fd.
+
+Clean up descriptors and the device fd immediately if event initialization
+fails. Also validate event_id before indexing event_fds_ and events_, avoiding
+an out-of-bounds access for an invalid interrupt identifier.
+
+---
+ driver/kernel/kernel_event_handler.cc | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/driver/kernel/kernel_event_handler.cc b/driver/kernel/kernel_event_handler.cc
+--- a/driver/kernel/kernel_event_handler.cc
++++ b/driver/kernel/kernel_event_handler.cc
+@@ -42,6 +42,20 @@ Status KernelEventHandler::Open() {
+ 
+   for (int i = 0; i < num_events_; ++i) {
+     event_fds_[i] = InitializeEventFd(i);
++    if (event_fds_[i] == INVALID_FD_VALUE) {
++      const int error = errno;
++      Status cleanup_status;
++      for (int j = 0; j < i; ++j) {
++        cleanup_status.Update(ReleaseEventFd(fd_, event_fds_[j], j));
++        event_fds_[j] = INVALID_FD_VALUE;
++      }
++      close(fd_);
++      fd_ = INVALID_FD_VALUE;
++      if (!cleanup_status.ok()) {
++        VLOG(1) << cleanup_status;
++      }
++      return FailedPreconditionError(
++          StringPrintf("Could not initialize event fd: %s", strerror(error)));
++    }
+     events_[i].reset();
+   }
+ 
+@@ -69,6 +83,13 @@ Status KernelEventHandler::RegisterEvent(int event_id,
+                                          KernelEvent::Handler handler) {
+   StdMutexLock lock(&mutex_);
+   if (fd_ == INVALID_FD_VALUE) {
+     return FailedPreconditionError("Device not open.");
+   }
++  if (event_id < 0 || event_id >= num_events_) {
++    return InvalidArgumentError(
++        StringPrintf("Invalid event id %d; expected range [0, %d)", event_id,
++                     num_events_));
++  }
++  if (event_fds_[event_id] == INVALID_FD_VALUE)
++    return FailedPreconditionError("Event fd is not initialized.");
+ 
+   RETURN_IF_ERROR(SetEventFd(fd_, event_fds_[event_id], event_id));
