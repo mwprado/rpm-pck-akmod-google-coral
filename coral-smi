@@ -1,0 +1,461 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: MIT
+"""
+coral-smi - lightweight monitor for Google Coral PCIe/M.2 Edge TPU devices.
+
+Reads the sysfs interface exported by the apex/gasket kernel driver and
+correlates it with /dev/apex_N, /proc/interrupts and processes holding the
+device node open.
+
+This tool intentionally does not report a fabricated "utilization %".  The
+upstream Apex driver does not export a hardware busy-cycle counter suitable
+for that metric.  Activity is represented by interrupt rate and open users.
+"""
+
+from __future__ import annotations
+
+import argparse
+import ctypes.util
+import glob
+import json
+import os
+import pwd
+import re
+import subprocess
+import sys
+import time
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Optional
+
+VERSION = "0.1.0"
+SYSFS_ROOT = Path("/sys/class/apex")
+DEV_ROOT = Path("/dev")
+PCI_RE = re.compile(r"^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]$")
+
+
+@dataclass
+class ProcessInfo:
+    pid: int
+    user: str
+    command: str
+
+
+@dataclass
+class DeviceInfo:
+    name: str
+    node: str
+    pci: Optional[str]
+    temperature_c: Optional[float]
+    trip0_c: Optional[float]
+    trip1_c: Optional[float]
+    trip2_c: Optional[float]
+    hw_warn1_c: Optional[float]
+    hw_warn2_c: Optional[float]
+    hw_warn1_enabled: Optional[bool]
+    hw_warn2_enabled: Optional[bool]
+    temp_poll_ms: Optional[int]
+    mapped_pages: Optional[int]
+    page_table_entries: Optional[int]
+    simple_page_table_entries: Optional[int]
+    unique_id: Optional[str]
+    interrupts_total: Optional[int]
+    interrupts_per_sec: Optional[float]
+    processes: list[ProcessInfo]
+    state: str
+
+
+def read_text(path: Path) -> Optional[str]:
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError):
+        return None
+
+
+def read_int(path: Path) -> Optional[int]:
+    value = read_text(path)
+    if value is None:
+        return None
+    try:
+        return int(value, 0)
+    except ValueError:
+        return None
+
+
+def read_bool(path: Path) -> Optional[bool]:
+    value = read_int(path)
+    return None if value is None else bool(value)
+
+
+def milli_c(path: Path) -> Optional[float]:
+    value = read_int(path)
+    return None if value is None else value / 1000.0
+
+
+def module_version(name: str) -> Optional[str]:
+    return read_text(Path("/sys/module") / name / "version")
+
+
+def runtime_package() -> Optional[str]:
+    try:
+        proc = subprocess.run(
+            ["rpm", "-q", "--qf", "%{NAME}-%{VERSION}-%{RELEASE}", "libedgetpu"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    return proc.stdout.strip() or None
+
+
+def runtime_library() -> Optional[str]:
+    return ctypes.util.find_library("edgetpu")
+
+
+def pci_bdf(sysfs_dir: Path) -> Optional[str]:
+    try:
+        resolved = (sysfs_dir / "device").resolve()
+    except OSError:
+        return None
+    for part in reversed(resolved.parts):
+        if PCI_RE.match(part):
+            return part.lower()
+    return None
+
+
+def device_processes(node: Path) -> list[ProcessInfo]:
+    target = str(node)
+    found: list[ProcessInfo] = []
+
+    for proc_dir in glob.glob("/proc/[0-9]*"):
+        pid_text = os.path.basename(proc_dir)
+        try:
+            pid = int(pid_text)
+        except ValueError:
+            continue
+
+        fd_dir = os.path.join(proc_dir, "fd")
+        matched = False
+        try:
+            for fd in os.scandir(fd_dir):
+                try:
+                    link = os.readlink(fd.path)
+                except OSError:
+                    continue
+                if link == target:
+                    matched = True
+                    break
+        except (PermissionError, FileNotFoundError, ProcessLookupError):
+            continue
+
+        if not matched:
+            continue
+
+        try:
+            st = os.stat(proc_dir)
+            user = pwd.getpwuid(st.st_uid).pw_name
+        except (OSError, KeyError):
+            user = "?"
+
+        command = read_text(Path(proc_dir) / "comm") or "?"
+        found.append(ProcessInfo(pid=pid, user=user, command=command))
+
+    found.sort(key=lambda p: p.pid)
+    return found
+
+
+def interrupt_total(pci: Optional[str]) -> Optional[int]:
+    """Return the sum of Apex-related interrupt counters across all CPUs."""
+    try:
+        lines = Path("/proc/interrupts").read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return None
+
+    total = 0
+    matched = False
+    needles = ["apex", "gasket"]
+    if pci:
+        needles.append(pci.lower())
+
+    for line in lines:
+        lower = line.lower()
+        if not any(needle in lower for needle in needles):
+            continue
+
+        # Fields before the interrupt controller/type are decimal per-CPU
+        # counters. Stop at the first non-decimal token.
+        try:
+            _, rhs = line.split(":", 1)
+        except ValueError:
+            continue
+
+        subtotal = 0
+        saw_counter = False
+        for token in rhs.split():
+            if token.isdecimal():
+                subtotal += int(token)
+                saw_counter = True
+            else:
+                break
+
+        if saw_counter:
+            total += subtotal
+            matched = True
+
+    return total if matched else None
+
+
+def collect_device(
+    sysfs_dir: Path,
+    previous_interrupts: Optional[int] = None,
+    elapsed: Optional[float] = None,
+) -> DeviceInfo:
+    name = sysfs_dir.name
+    node = DEV_ROOT / name
+    pci = pci_bdf(sysfs_dir)
+    interrupts = interrupt_total(pci)
+    processes = device_processes(node)
+
+    rate: Optional[float] = None
+    if (
+        interrupts is not None
+        and previous_interrupts is not None
+        and elapsed is not None
+        and elapsed > 0
+    ):
+        delta = max(0, interrupts - previous_interrupts)
+        rate = delta / elapsed
+
+    if rate is not None and rate > 0:
+        state = "ACTIVE"
+    elif processes:
+        state = "OPEN"
+    else:
+        state = "IDLE"
+
+    return DeviceInfo(
+        name=name,
+        node=str(node),
+        pci=pci,
+        temperature_c=milli_c(sysfs_dir / "temp"),
+        trip0_c=milli_c(sysfs_dir / "trip_point0_temp"),
+        trip1_c=milli_c(sysfs_dir / "trip_point1_temp"),
+        trip2_c=milli_c(sysfs_dir / "trip_point2_temp"),
+        hw_warn1_c=milli_c(sysfs_dir / "hw_temp_warn1"),
+        hw_warn2_c=milli_c(sysfs_dir / "hw_temp_warn2"),
+        hw_warn1_enabled=read_bool(sysfs_dir / "hw_temp_warn1_en"),
+        hw_warn2_enabled=read_bool(sysfs_dir / "hw_temp_warn2_en"),
+        temp_poll_ms=read_int(sysfs_dir / "temp_poll_interval"),
+        mapped_pages=read_int(sysfs_dir / "node_0_num_mapped_pages"),
+        page_table_entries=read_int(sysfs_dir / "node_0_page_table_entries"),
+        simple_page_table_entries=read_int(
+            sysfs_dir / "node_0_simple_page_table_entries"
+        ),
+        unique_id=read_text(sysfs_dir / "unique_id"),
+        interrupts_total=interrupts,
+        interrupts_per_sec=rate,
+        processes=processes,
+        state=state,
+    )
+
+
+def find_devices(selection: Optional[str]) -> list[Path]:
+    if not SYSFS_ROOT.is_dir():
+        return []
+
+    devices = sorted(
+        (p for p in SYSFS_ROOT.glob("apex_*") if p.is_dir()),
+        key=lambda p: p.name,
+    )
+
+    if not selection:
+        return devices
+
+    wanted = Path(selection).name
+    return [p for p in devices if p.name == wanted]
+
+
+def fmt_temp(value: Optional[float]) -> str:
+    return "-" if value is None else f"{value:.1f} °C"
+
+
+def fmt_int(value: Optional[int]) -> str:
+    return "-" if value is None else str(value)
+
+
+def fmt_bool(value: Optional[bool]) -> str:
+    if value is None:
+        return "-"
+    return "yes" if value else "no"
+
+
+def fmt_rate(value: Optional[float]) -> str:
+    return "-" if value is None else f"{value:.1f}/s"
+
+
+def print_plain(devices: list[DeviceInfo]) -> None:
+    print(f"coral-smi {VERSION}")
+    runtime = runtime_package()
+    library = runtime_library()
+    print(
+        "Runtime       "
+        + (runtime or "not installed")
+        + (f"  [{library}]" if library else "")
+    )
+    print(
+        "Kernel        "
+        f"apex={module_version('apex') or '?'} "
+        f"gasket={module_version('gasket') or '?'}"
+    )
+
+    for idx, dev in enumerate(devices):
+        if idx or devices:
+            print()
+        print(f"Coral {dev.name}")
+        print("-" * 60)
+        print(f"Device        {dev.node}")
+        print(f"PCI           {dev.pci or '-'}")
+        print(f"State         {dev.state}")
+        print(f"Temperature   {fmt_temp(dev.temperature_c)}")
+        print(
+            "Thermal trip  "
+            f"{fmt_temp(dev.trip0_c)} / {fmt_temp(dev.trip1_c)} / "
+            f"{fmt_temp(dev.trip2_c)}"
+        )
+        print(
+            "HW warnings   "
+            f"{fmt_temp(dev.hw_warn1_c)} ({fmt_bool(dev.hw_warn1_enabled)}) / "
+            f"{fmt_temp(dev.hw_warn2_c)} ({fmt_bool(dev.hw_warn2_enabled)})"
+        )
+        print(f"Temp poll     {fmt_int(dev.temp_poll_ms)} ms")
+        mapped = fmt_int(dev.mapped_pages)
+        entries = fmt_int(dev.page_table_entries)
+        print(f"Mapped pages  {mapped} / {entries}")
+        print(f"Interrupts    {fmt_int(dev.interrupts_total)}  ({fmt_rate(dev.interrupts_per_sec)})")
+        print(f"Unique ID     {dev.unique_id or '-'}")
+
+        if dev.processes:
+            proc_text = ", ".join(
+                f"{p.command}[{p.pid}]/{p.user}" for p in dev.processes
+            )
+        else:
+            proc_text = "-"
+        print(f"Processes     {proc_text}")
+
+
+def json_payload(devices: list[DeviceInfo]) -> dict:
+    return {
+        "coral_smi_version": VERSION,
+        "runtime_package": runtime_package(),
+        "runtime_library": runtime_library(),
+        "kernel_modules": {
+            "apex": module_version("apex"),
+            "gasket": module_version("gasket"),
+        },
+        "devices": [asdict(d) for d in devices],
+    }
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Monitor Google Coral PCIe/M.2 Edge TPU devices"
+    )
+    parser.add_argument(
+        "-d",
+        "--device",
+        help="device to show, for example apex_0 or /dev/apex_0",
+    )
+    parser.add_argument(
+        "-w",
+        "--watch",
+        nargs="?",
+        const=1.0,
+        type=float,
+        metavar="SECONDS",
+        help="refresh continuously (default interval: 1 second)",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="emit machine-readable JSON",
+    )
+    parser.add_argument(
+        "--no-clear",
+        action="store_true",
+        help="do not clear the terminal between watch samples",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"coral-smi {VERSION}",
+    )
+    return parser.parse_args()
+
+
+def sample(
+    paths: list[Path],
+    previous: dict[str, int],
+    elapsed: Optional[float],
+) -> tuple[list[DeviceInfo], dict[str, int]]:
+    devices: list[DeviceInfo] = []
+    current: dict[str, int] = {}
+
+    for path in paths:
+        dev = collect_device(path, previous.get(path.name), elapsed)
+        devices.append(dev)
+        if dev.interrupts_total is not None:
+            current[path.name] = dev.interrupts_total
+
+    return devices, current
+
+
+def main() -> int:
+    args = parse_args()
+
+    if args.watch is not None and args.watch <= 0:
+        print("coral-smi: --watch interval must be greater than zero", file=sys.stderr)
+        return 2
+
+    paths = find_devices(args.device)
+    if not paths:
+        if args.device:
+            print(f"coral-smi: Coral device '{args.device}' not found", file=sys.stderr)
+        else:
+            print("coral-smi: no /sys/class/apex/apex_* devices found", file=sys.stderr)
+        return 1
+
+    previous: dict[str, int] = {}
+    previous_time: Optional[float] = None
+
+    while True:
+        now = time.monotonic()
+        elapsed = None if previous_time is None else now - previous_time
+        devices, current = sample(paths, previous, elapsed)
+
+        if args.json:
+            print(json.dumps(json_payload(devices), separators=(",", ":")))
+        else:
+            if (
+                args.watch is not None
+                and not args.no_clear
+                and sys.stdout.isatty()
+            ):
+                print("\033[2J\033[H", end="")
+            print_plain(devices)
+
+        if args.watch is None:
+            return 0
+
+        sys.stdout.flush()
+        previous = current
+        previous_time = now
+        time.sleep(args.watch)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
