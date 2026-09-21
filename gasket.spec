@@ -14,8 +14,6 @@ BuildArch:      noarch
 BuildRequires:  systemd-rpm-macros
 
 Requires(pre):  shadow-utils
-Requires:       akmod-gasket >= %{version}-%{release}
-
 Provides:       gasket-kmod-common = %{version}-%{release}
 Conflicts:      gasket-dkms
 
@@ -63,3 +61,4 @@ fi
 - Install upstream Apex udev permissions rule
 - Load gasket and apex modules at boot
 - Remove DKMS runtime dependency
+- Make gasket-kmod-common independent of akmod-gasket to avoid dependency cycles
