@@ -6,8 +6,8 @@
 
 Name:           libedgetpu
 Version:        16.0
-Release:        2.tf%{tf_version}.git%{shortcommit}%{?dist}
-Summary:        Userspace runtime library for Google Coral Edge TPU devices
+Release:        3.tf%{tf_version}.git%{shortcommit}%{?dist}
+Summary:        PCIe userspace runtime library for Google Coral Edge TPU
 
 License:        Apache-2.0
 URL:            https://github.com/google-coral/libedgetpu
@@ -15,8 +15,7 @@ URL:            https://github.com/google-coral/libedgetpu
 # Official Google Coral runtime source.
 Source0:        %{url}/archive/%{commit}/libedgetpu-%{commit}.tar.gz
 
-# libedgetpu's native Makefile build requires the matching TensorFlow source
-# tree. Upstream's final release explicitly targets TensorFlow 2.16.1.
+# The native Makefile build needs the matching TensorFlow source tree.
 Source1:        https://github.com/tensorflow/tensorflow/archive/refs/tags/v%{tf_version}.tar.gz#/tensorflow-%{tf_version}.tar.gz
 
 ExclusiveArch:  x86_64
@@ -27,26 +26,22 @@ BuildRequires:  make
 BuildRequires:  python3
 BuildRequires:  binutils
 BuildRequires:  binutils-gold
-BuildRequires:  xxd
 
 BuildRequires:  flatbuffers-devel
 BuildRequires:  flatbuffers-compiler
 BuildRequires:  abseil-cpp-devel
-BuildRequires:  libusb1-devel
 BuildRequires:  pkgconf-pkg-config
-
-Requires:       libusb1
 
 %description
 libedgetpu is the userspace runtime library for Google Coral Edge TPU
 accelerators.
 
-This package contains the standard-speed runtime. It is built from the
-official Google Coral libedgetpu source against TensorFlow %{tf_version}.
+This Fedora build is intentionally PCIe/M.2-only.  It targets Coral devices
+exposed by the gasket/apex kernel driver as /dev/apex_N and omits the USB
+transport, DFU firmware handling and libusb dependency.
 
-The PCIe/M.2 Coral device is exposed by the gasket/apex kernel driver as
-/dev/apex_0; libedgetpu provides the userspace interface used by TensorFlow
-Lite and PyCoral.
+The package is built from the official Google Coral libedgetpu source against
+TensorFlow %{tf_version}.
 
 
 %package devel
@@ -61,36 +56,62 @@ Google Coral Edge TPU through libedgetpu.
 %prep
 %setup -q -n libedgetpu-%{commit} -a 1
 
-# The final upstream README requires C++17 for TensorFlow 2.16.1, while the
-# standalone Makefile still carries the older c++14 setting. The build command
-# below overrides it explicitly, but keep this source tree internally
-# consistent as well.
-sed -i 's/-std=c++14/-std=c++17/' makefile_build/Makefile
-
-# The standalone Makefile was not updated when TensorFlow moved common.c to
-# tensorflow/lite/core/c/common.cc.  Treat the replacement as C++, otherwise
-# make looks for a source file that no longer exists in TF 2.16.1.
 python3 - <<'PY'
 from pathlib import Path
 
 p = Path("makefile_build/Makefile")
 text = p.read_text()
 
-old_c = "LIBEDGETPU_CSRCS := $(TFROOT)/tensorflow/lite/c/common.c"
-if old_c not in text:
-    raise SystemExit("expected TensorFlow common.c entry not found")
+# Upstream's last released standalone Makefile predates the TensorFlow 2.16
+# source layout.  Follow the later upstream maintenance work: the old C source
+# is gone and the required TensorFlow Lite implementation files are C++.
+text = text.replace("-std=c++14", "-std=c++17")
+text = text.replace(
+    "LIBEDGETPU_CSRCS := $(TFROOT)/tensorflow/lite/c/common.c",
+    "LIBEDGETPU_CSRCS :="
+)
 
-text = text.replace(old_c, "LIBEDGETPU_CSRCS :=")
-
-needle = "LIBEDGETPU_CCSRCS := \\\n"
+needle = "\t$(TFROOT)/tensorflow/lite/util.cc\n"
 replacement = (
-    "LIBEDGETPU_CCSRCS := \\\n"
     "\t$(TFROOT)/tensorflow/lite/core/c/common.cc \\\n"
+    "\t$(TFROOT)/tensorflow/lite/util.cc \\\n"
+    "\t$(TFROOT)/tensorflow/lite/array.cc\n"
 )
 if needle not in text:
-    raise SystemExit("LIBEDGETPU_CCSRCS section not found")
-
+    raise SystemExit("TensorFlow Lite source-list anchor not found")
 text = text.replace(needle, replacement, 1)
+
+# This machine uses a PCIe/M.2 Coral (/dev/apex_0).  Remove the entire USB
+# provider and USB transport from the standalone build.  This also avoids
+# compiling obsolete DFU code with current Fedora/GCC.
+remove_sources = [
+    "$(BUILDROOT)/driver/beagle/beagle_usb_driver_provider.cc",
+    "$(BUILDROOT)/driver/usb/libusb_options_default.cc",
+    "$(BUILDROOT)/driver/usb/local_usb_device.cc",
+    "$(BUILDROOT)/driver/usb/usb_dfu_commands.cc",
+    "$(BUILDROOT)/driver/usb/usb_dfu_util.cc",
+    "$(BUILDROOT)/driver/usb/usb_driver.cc",
+    "$(BUILDROOT)/driver/usb/usb_io_request.cc",
+    "$(BUILDROOT)/driver/usb/usb_ml_commands.cc",
+    "$(BUILDROOT)/driver/usb/usb_registers.cc",
+    "$(BUILDROOT)/driver/usb/usb_standard_commands.cc",
+]
+
+lines = text.splitlines()
+lines = [
+    line for line in lines
+    if not any(src in line for src in remove_sources)
+]
+text = "\n".join(lines) + "\n"
+
+# No legacy C object remains.
+text = text.replace(" firmware $(LIBEDGETPU_FLATC_OBJS) $(LIBEDGETPU_COBJS) ",
+                    " $(LIBEDGETPU_FLATC_OBJS) ")
+text = text.replace(" $(LIBEDGETPU_FLATC_OBJS) $(LIBEDGETPU_COBJS) ",
+                    " $(LIBEDGETPU_FLATC_OBJS) ")
+text = text.replace("$(LIBEDGETPU_COBJS) $(LIBEDGETPU_CCOBJS)",
+                    "$(LIBEDGETPU_CCOBJS)")
+
 p.write_text(text)
 PY
 
@@ -98,9 +119,9 @@ PY
 %build
 TFROOT="${PWD}/tensorflow-%{tf_version}"
 
-# New Fedora Abseil no longer ships a monolithic libabsl_flags.so. Use its
-# pkg-config dependency graph instead of the historical hard-coded link list
-# from libedgetpu's Makefile.
+# Fedora's modern Abseil is split into many libraries.  Let pkg-config provide
+# the complete transitive link set rather than using the historical hard-coded
+# Debian library list.
 ABSL_LIBS="$(pkg-config --libs \
     absl_flags \
     absl_hash \
@@ -119,8 +140,7 @@ make %{?_smp_mflags} \
         -Wl,--version-script=${PWD}/tflite/public/libedgetpu.lds \
         -fuse-ld=gold \
         -lflatbuffers \
-        ${ABSL_LIBS} \
-        -lusb-1.0" \
+        ${ABSL_LIBS}" \
     libedgetpu-throttled
 
 
@@ -166,6 +186,12 @@ nm -D %{buildroot}%{_libdir}/libedgetpu.so.1.0 | \
 
 
 %changelog
+* Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-3.tf2.16.1.gite35aed1
+- Build a PCIe/M.2-only runtime for gasket/apex devices
+- Remove obsolete USB/DFU sources and the libusb dependency
+- Align standalone Makefile source list with modern TensorFlow Lite
+- Add tensorflow/lite/core/c/common.cc and tensorflow/lite/array.cc
+
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-2.tf2.16.1.gite35aed1
 - Fix standalone Makefile for TensorFlow 2.16.1 common.cc location
 - Compile TensorFlow Lite common.cc as C++
@@ -173,5 +199,5 @@ nm -D %{buildroot}%{_libdir}/libedgetpu.so.1.0 | \
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-1.tf2.16.1.gite35aed1
 - Initial Fedora package for Google Coral libedgetpu
 - Build official upstream source against TensorFlow 2.16.1
-- Use Fedora system Abseil, FlatBuffers and libusb
+- Use Fedora system Abseil and FlatBuffers
 - Package the standard-speed runtime for Silverblue
