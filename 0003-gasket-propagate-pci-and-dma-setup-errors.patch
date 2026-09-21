@@ -12,8 +12,8 @@ Check both DMA mask operations, unwind the BAR mapping on failure, and return
 the original error from gasket_setup_pci().
 
 ---
- src/gasket_core.c | 22 ++++++++++++++++++----
- 1 file changed, 18 insertions(+), 4 deletions(-)
+ src/gasket_core.c | 23 ++++++++++++++++++-----
+ 1 file changed, 18 insertions(+), 5 deletions(-)
 
 diff --git a/src/gasket_core.c b/src/gasket_core.c
 --- a/src/gasket_core.c
