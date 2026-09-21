@@ -12,13 +12,13 @@ inverted status check in UnmapAllRegions(), which currently logs successful
 unmaps as errors, and correct the Read32 alignment diagnostic.
 
 ---
- driver/kernel/kernel_registers.cc | 9 ++++++---
- 1 file changed, 6 insertions(+), 3 deletions(-)
+ driver/kernel/kernel_registers.cc | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
 
 diff --git a/driver/kernel/kernel_registers.cc b/driver/kernel/kernel_registers.cc
 --- a/driver/kernel/kernel_registers.cc
 +++ b/driver/kernel/kernel_registers.cc
-@@ -51,7 +51,7 @@ void KernelRegisters::UnmapAllRegions() {
+@@ -66,7 +66,7 @@ void KernelRegisters::UnmapAllRegions() {
    for (auto& region : mmap_region_) {
      if (region.registers != nullptr) {
        status = UnmapRegion(fd_, region);
@@ -27,7 +27,7 @@ diff --git a/driver/kernel/kernel_registers.cc b/driver/kernel/kernel_registers.
          LOG(ERROR) << status;
        }
        region.registers = nullptr;
-@@ -85,9 +85,12 @@ Status KernelRegisters::Open() {
+@@ -100,9 +100,11 @@ Status KernelRegisters::Open() {
  
      auto statusor = MapRegion(fd_, region, read_only_);
      if (!statusor.ok()) {
@@ -40,7 +40,7 @@ diff --git a/driver/kernel/kernel_registers.cc b/driver/kernel/kernel_registers.
      }
      region.registers = std::move(statusor.ValueOrDie());
      VLOG(3) << "Got map addr at 0x" << std::hex << region.registers;
-@@ -181,7 +184,7 @@ StatusOr<uint32> KernelRegisters::Read32(uint64 offset) {
+@@ -247,6 +249,6 @@ StatusOr<uint32> KernelRegisters::Read32(uint64 offset) {
    }
    if (offset % sizeof(uint32) != 0) {
      return FailedPreconditionError(StringPrintf(
