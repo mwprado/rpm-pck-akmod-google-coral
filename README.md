@@ -201,22 +201,22 @@ detectar símbolos não resolvidos antes de publicar o RPM.
 Além das adaptações de build para Fedora/TensorFlow 2.16.1, o pacote aplica
 quatro correções locais de lógica encontradas no código upstream arquivado:
 
-- `libedgetpu-0001-kernel-mmu-fix-error-cleanup-and-ioctl-fallback.patch` —
+- `0001-libedgetpu-fix-mmu-ioctl-fallback-and-open-cleanup.patch` —
   fecha o file descriptor do dispositivo quando a partição da page table falha
   e corrige o fallback de `GASKET_IOCTL_MAP_BUFFER_FLAGS`: `ioctl()` retorna
   `-1` e informa `EPERM`, `ENOTTY` ou `EINVAL` por `errno`, portanto
   comparar diretamente o retorno com `-EPERM` etc. nunca acionava o fallback;
-- `libedgetpu-0002-kernel-registers-clean-up-partial-mappings.patch` —
+- `0002-libedgetpu-clean-up-partial-register-mappings.patch` —
   desfaz `mmap()` já realizados se um mapeamento posterior falhar e corrige
   uma condição invertida que registrava sucesso como erro em
   `UnmapAllRegions()`;
-- `libedgetpu-0003-kernel-events-handle-eventfd-errors.patch` — valida falhas
+- `0003-libedgetpu-validate-eventfd-and-event-index.patch` — valida falhas
   de `eventfd()`, limpa descritores já criados e rejeita índices de evento fora
   do intervalo antes de indexar os vetores internos;
-- `libedgetpu-0004-coherent-allocator-preserve-close-errors.patch` — preserva
+- `0004-libedgetpu-preserve-coherent-allocator-close-errors.patch` — preserva
   erros de `munmap()` no fechamento do coherent allocator e garante o
   fechamento do file descriptor mesmo quando o ioctl de desativação falha;
-- `libedgetpu-0005-kernel-events-clear-kernel-eventfd-bindings.patch` — envia
+- `0005-libedgetpu-clear-eventfd-bindings-before-close.patch` — envia
   `GASKET_IOCTL_CLEAR_EVENTFD` antes de fechar cada `eventfd`, liberando a
   referência `eventfd_ctx` mantida pelo driver de kernel entre ciclos de uso.
 
