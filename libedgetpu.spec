@@ -8,7 +8,7 @@
 
 Name:           libedgetpu
 Version:        16.0
-Release:        8.tf%{tf_version}.git%{shortcommit}%{?dist}
+Release:        9.tf%{tf_version}.git%{shortcommit}%{?dist}
 Summary:        PCIe userspace runtime library for Google Coral Edge TPU
 
 License:        Apache-2.0
@@ -260,6 +260,10 @@ PY
 
 
 %changelog
+* Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-9.tf2.16.1.gite35aed1
+- Fix malformed unified-diff hunk metadata in the local audit patch series
+- Revalidate all Patch0..Patch4 hunk counts and exact upstream contexts
+
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-8.tf2.16.1.gite35aed1
 - Consolidate the libedgetpu audit into one Patch0..Patch4 series
 - Remove duplicate Patch tags and duplicate patch application in %%prep
