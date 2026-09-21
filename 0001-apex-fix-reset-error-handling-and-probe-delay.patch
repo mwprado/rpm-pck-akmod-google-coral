@@ -1,0 +1,45 @@
+From: Moacyr Prado <mwprado@github>
+Subject: [PATCH 1/3] apex: fix reset error handling and probe retry delay
+
+apex_pci_probe() ignored the return value from apex_reset(), allowing probe
+to continue after a failed hardware reset.
+
+The readiness loop also used schedule_timeout() while the current task
+remained TASK_RUNNING. In that state schedule_timeout() does not provide the
+intended millisecond sleep, so the nominal 12 second retry window can collapse
+into a tight scheduler loop.
+
+Use msleep(), matching the millisecond APEX_RESET_DELAY constant and the
+existing wait helper used elsewhere in this driver, and stop probing if the
+initial reset fails.
+
+---
+ src/apex_driver.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/src/apex_driver.c b/src/apex_driver.c
+--- a/src/apex_driver.c
++++ b/src/apex_driver.c
+@@ -1007,7 +1007,12 @@ static int apex_pci_probe(struct pci_dev *pci_dev,
+ 	apply_module_params(apex_dev);
+ 	program_hw_temp_warnings(apex_dev);
+ 	pci_set_drvdata(pci_dev, apex_dev);
+-	apex_reset(gasket_dev);
++	ret = apex_reset(gasket_dev);
++	if (ret) {
++		dev_err(&pci_dev->dev, "error resetting Apex device: %d\n",
++			ret);
++		goto remove_device;
++	}
+ 
+ 	while (retries < APEX_RESET_RETRY) {
+ 		page_table_ready =
+@@ -1021,7 +1026,7 @@ static int apex_pci_probe(struct pci_dev *pci_dev,
+ 					   APEX_BAR2_REG_KERNEL_HIB_MSIX_TABLE_INIT);
+ 		if (page_table_ready && msix_table_ready)
+ 			break;
+-		schedule_timeout(msecs_to_jiffies(APEX_RESET_DELAY));
++		msleep(APEX_RESET_DELAY);
+ 		retries++;
+ 	}
+ 
