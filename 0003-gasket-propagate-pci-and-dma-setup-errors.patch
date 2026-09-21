@@ -1,0 +1,56 @@
+From: Moacyr Prado <mwprado@github>
+Subject: [PATCH 3/3] gasket: propagate PCI and DMA setup errors
+
+gasket_map_pci_bar() ignored failures from dma_set_mask() and
+dma_set_coherent_mask(), so probe could continue with an unsupported DMA
+configuration.
+
+gasket_setup_pci() also discarded the actual mapping error and always returned
+-ENOMEM, hiding useful diagnostics such as -EINVAL.
+
+Check both DMA mask operations, unwind the BAR mapping on failure, and return
+the original error from gasket_setup_pci().
+
+---
+ src/gasket_core.c | 22 ++++++++++++++++++----
+ 1 file changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/src/gasket_core.c b/src/gasket_core.c
+--- a/src/gasket_core.c
++++ b/src/gasket_core.c
+@@ -326,9 +326,23 @@ static int gasket_map_pci_bar(struct gasket_dev *gasket_dev, int bar_num)
+ 		goto fail;
+ 	}
+ 
+-	dma_set_mask(&gasket_dev->pci_dev->dev, DMA_BIT_MASK(dma_bit_mask));
+-	dma_set_coherent_mask(&gasket_dev->pci_dev->dev,
+-			      DMA_BIT_MASK(dma_bit_mask));
++	ret = dma_set_mask(&gasket_dev->pci_dev->dev,
++			   DMA_BIT_MASK(dma_bit_mask));
++	if (ret) {
++		dev_err(gasket_dev->dev,
++			"Unable to set DMA mask to %d bits: %d\n",
++			dma_bit_mask, ret);
++		goto fail;
++	}
++
++	ret = dma_set_coherent_mask(&gasket_dev->pci_dev->dev,
++				    DMA_BIT_MASK(dma_bit_mask));
++	if (ret) {
++		dev_err(gasket_dev->dev,
++			"Unable to set coherent DMA mask to %d bits: %d\n",
++			dma_bit_mask, ret);
++		goto fail;
++	}
+ 
+ 	return 0;
+ 
+@@ -399,7 +413,7 @@ fail:
+ 	for (i = 0; i < mapped_bars; i++)
+ 		gasket_unmap_pci_bar(gasket_dev, i);
+ 
+-	return -ENOMEM;
++	return ret;
+ }
+ 
+ /* Unmaps memory for the specified device. */
