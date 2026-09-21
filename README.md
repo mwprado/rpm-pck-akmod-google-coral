@@ -62,6 +62,22 @@ Também são aplicados patches de compatibilidade provenientes do projeto
 `no_llseek`, `class_create()`, `eventfd_signal()`, namespace
 `DMA_BUF` e `zap_special_vma_range()`.
 
+Além desses patches de compatibilidade, este repositório mantém três correções
+locais de lógica encontradas durante a auditoria do driver Google arquivado:
+
+- `0001-apex-fix-reset-error-handling-and-probe-delay.patch` — verifica o
+  retorno de `apex_reset()` durante o probe e substitui o uso incorreto de
+  `schedule_timeout()` em estado `TASK_RUNNING` por `msleep()`;
+- `0002-gasket-make-device-slot-allocation-race-free.patch` — reserva o slot
+  em `internal_desc->devs[]` ainda sob o mutex, evitando corrida entre probes
+  simultâneos de múltiplos Edge TPUs;
+- `0003-gasket-propagate-pci-and-dma-setup-errors.patch` — verifica os
+  retornos de `dma_set_mask()` e `dma_set_coherent_mask()` e preserva o erro
+  real produzido durante a configuração PCI.
+
+Os patches são aplicados depois das correções de compatibilidade do
+`gasket-dkms` e foram verificados contra o commit Google fixado pelo spec.
+
 ### Por que akmods em vez de DKMS?
 
 A implementação antiga do driver Coral normalmente é distribuída usando
