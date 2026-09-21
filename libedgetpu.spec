@@ -8,7 +8,7 @@
 
 Name:           libedgetpu
 Version:        16.0
-Release:        6.tf%{tf_version}.git%{shortcommit}%{?dist}
+Release:        7.tf%{tf_version}.git%{shortcommit}%{?dist}
 Summary:        PCIe userspace runtime library for Google Coral Edge TPU
 
 License:        Apache-2.0
@@ -30,6 +30,7 @@ Patch0:         libedgetpu-0001-kernel-mmu-fix-error-cleanup-and-ioctl-fallback.
 Patch1:         libedgetpu-0002-kernel-registers-clean-up-partial-mappings.patch
 Patch2:         libedgetpu-0003-kernel-events-handle-eventfd-errors.patch
 Patch3:         libedgetpu-0004-coherent-allocator-preserve-close-errors.patch
+Patch4:         libedgetpu-0005-kernel-events-clear-kernel-eventfd-bindings.patch
 
 # Local correctness fixes found while auditing the archived libedgetpu source.
 Patch0:         0001-libedgetpu-fix-mmu-ioctl-fallback-and-open-cleanup.patch
@@ -78,6 +79,7 @@ Google Coral Edge TPU through libedgetpu.
 %patch -P 1 -p1
 %patch -P 2 -p1
 %patch -P 3 -p1
+%patch -P 4 -p1
 %autopatch -p1
 
 python3 - <<'PY'
@@ -217,13 +219,39 @@ readelf -d %{buildroot}%{_libdir}/libedgetpu.so.1.0 | \
 nm -D %{buildroot}%{_libdir}/libedgetpu.so.1.0 | \
     grep -q 'edgetpu_list_devices'
 
+nm -D %{buildroot}%{_libdir}/libedgetpu.so.1.0 | \
+    grep -q 'tflite_plugin_create_delegate'
+
+nm -D %{buildroot}%{_libdir}/libedgetpu.so.1.0 | \
+    grep -q 'tflite_plugin_destroy_delegate'
+
 # Catch unresolved runtime symbols that a normal shared-library link permits.
 # This specifically prevents static archive ordering mistakes (such as
 # FlatBuffers ClassicLocale) from producing an RPM that builds but cannot be
 # dlopen()'d.
 python3 - <<'PY'
 import ctypes
-ctypes.CDLL(r"%{buildroot}%{_libdir}/libedgetpu.so.1.0")
+
+lib = ctypes.CDLL(r"%{buildroot}%{_libdir}/libedgetpu.so.1.0")
+
+# Exercise hardware-independent C API initialization/enumeration.  A COPR
+# builder normally has no Edge TPU, so zero devices is valid; the goal is to
+# catch loader/static-initialization failures and validate allocation/free ABI.
+lib.edgetpu_list_devices.argtypes = [ctypes.POINTER(ctypes.c_size_t)]
+lib.edgetpu_list_devices.restype = ctypes.c_void_p
+lib.edgetpu_free_devices.argtypes = [ctypes.c_void_p]
+lib.edgetpu_free_devices.restype = None
+lib.edgetpu_version.argtypes = []
+lib.edgetpu_version.restype = ctypes.c_char_p
+
+count = ctypes.c_size_t()
+devices = lib.edgetpu_list_devices(ctypes.byref(count))
+if devices:
+    lib.edgetpu_free_devices(devices)
+
+version = lib.edgetpu_version()
+if not version:
+    raise SystemExit("edgetpu_version() returned NULL")
 PY
 
 
@@ -241,6 +269,11 @@ PY
 
 
 %changelog
+* Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-7.tf2.16.1.gite35aed1
+- Clear Gasket eventfd bindings before closing userspace eventfds
+- Do not treat EPERM as an unsupported MAP_BUFFER_FLAGS ioctl
+- Extend smoke tests to exported LiteRT plugin symbols and C API enumeration
+
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-6.tf2.16.1.gite35aed1
 - Close the MMU device fd when page-table partitioning fails
 - Fix MAP_BUFFER_FLAGS fallback to inspect errno from ioctl()
