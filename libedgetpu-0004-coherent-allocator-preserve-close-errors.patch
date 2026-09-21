@@ -1,5 +1,5 @@
 From: Moacyr Prado <mwprado@github>
-Subject: [PATCH 4/4] coherent allocator: preserve close errors and release fd
+Subject: [PATCH 4/5] coherent allocator: preserve close errors and release fd
 
 KernelCoherentAllocator::DoClose() stores an error returned by Unmap(), but
 returns a fresh OK status when the allocator-disable ioctl succeeds. This hides
