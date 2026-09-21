@@ -1,0 +1,65 @@
+From: Moacyr Prado <mwprado@github>
+Subject: [PATCH 3/4] kernel events: validate eventfd creation and event ids
+
+KernelEventHandler::Open() assumes every platform event descriptor is created
+successfully. On Linux eventfd() can fail and return -1, but the handler still
+reports a successful Open(), leaving later registration to fail in a less
+useful place and leaking descriptors already created in the loop.
+
+Validate each descriptor, unwind previously allocated descriptors and the
+device fd on failure, and reject out-of-range event ids before indexing the
+event vectors.
+
+---
+ driver/kernel/kernel_event_handler.cc | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/driver/kernel/kernel_event_handler.cc b/driver/kernel/kernel_event_handler.cc
+--- a/driver/kernel/kernel_event_handler.cc
++++ b/driver/kernel/kernel_event_handler.cc
+@@ -38,6 +38,22 @@ Status KernelEventHandler::Open() {
+ 
+   for (int i = 0; i < num_events_; ++i) {
+     event_fds_[i] = InitializeEventFd(i);
++    if (event_fds_[i] == INVALID_FD_VALUE) {
++      const int saved_errno = errno;
++
++      for (int j = 0; j < i; ++j) {
++        if (event_fds_[j] != INVALID_FD_VALUE) {
++          ReleaseEventFd(fd_, event_fds_[j], j);
++          event_fds_[j] = INVALID_FD_VALUE;
++        }
++      }
++
++      close(fd_);
++      fd_ = INVALID_FD_VALUE;
++      return FailedPreconditionError(
++          StringPrintf("Event fd initialization failed: %s",
++                       strerror(saved_errno)));
++    }
+     events_[i].reset();
+   }
+ 
+@@ -62,6 +78,7 @@ Status KernelEventHandler::Close() {
+   for (int i = 0; i < num_events_; ++i) {
+     events_[i].reset();
+     status.Update(ReleaseEventFd(fd_, event_fds_[i], i));
++    event_fds_[i] = INVALID_FD_VALUE;
+   }
+ 
+   close(fd_);
+@@ -74,6 +91,14 @@ Status KernelEventHandler::RegisterEvent(int event_id,
+   if (fd_ == INVALID_FD_VALUE) {
+     return FailedPreconditionError("Device not open.");
+   }
++  if (event_id < 0 || event_id >= num_events_) {
++    return OutOfRangeError(
++        StringPrintf("Event id %d is outside valid range [0, %d).", event_id,
++                     num_events_));
++  }
++  if (event_fds_[event_id] == INVALID_FD_VALUE) {
++    return FailedPreconditionError("Event fd is not initialized.");
++  }
+ 
+   RETURN_IF_ERROR(SetEventFd(fd_, event_fds_[event_id], event_id));
+ 
