@@ -9,11 +9,11 @@ teardown.
 
 Unmap already-created regions before closing the descriptor. Also fix the
 inverted status check in UnmapAllRegions(), which currently logs successful
-unmaps as errors, and correct the Read32 alignment diagnostic.
+unmaps as errors.
 
 ---
- driver/kernel/kernel_registers.cc | 8 +++++---
- 1 file changed, 5 insertions(+), 3 deletions(-)
+ driver/kernel/kernel_registers.cc | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
 
 diff --git a/driver/kernel/kernel_registers.cc b/driver/kernel/kernel_registers.cc
 --- a/driver/kernel/kernel_registers.cc
@@ -27,7 +27,7 @@ diff --git a/driver/kernel/kernel_registers.cc b/driver/kernel/kernel_registers.
          LOG(ERROR) << status;
        }
        region.registers = nullptr;
-@@ -100,9 +100,11 @@ Status KernelRegisters::Open() {
+@@ -100,9 +100,12 @@ Status KernelRegisters::Open() {
  
      auto statusor = MapRegion(fd_, region, read_only_);
      if (!statusor.ok()) {
@@ -40,11 +40,3 @@ diff --git a/driver/kernel/kernel_registers.cc b/driver/kernel/kernel_registers.
      }
      region.registers = std::move(statusor.ValueOrDie());
      VLOG(3) << "Got map addr at 0x" << std::hex << region.registers;
-@@ -247,6 +249,6 @@ StatusOr<uint32> KernelRegisters::Read32(uint64 offset) {
-   }
-   if (offset % sizeof(uint32) != 0) {
-     return FailedPreconditionError(StringPrintf(
--        "Offset (0x%016llx) not aligned to 8B",
-+        "Offset (0x%016llx) not aligned to 4B",
-         static_cast<unsigned long long>(offset)));  // NOLINT(runtime/int)
-   }
