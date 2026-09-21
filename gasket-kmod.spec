@@ -18,7 +18,7 @@
 
 Name:           %{kmod_name}-kmod
 Version:        1.0.18.git20240425.%{shortcommit}
-Release:        3%{?dist}
+Release:        4%{?dist}
 Summary:        Google Coral Gasket and Apex kernel modules
 
 License:        GPL-2.0-only
@@ -37,6 +37,11 @@ Patch3:         https://github.com/KyleGospo/gasket-dkms/commit/8d1fb86016ef1c6f
 Patch4:         https://github.com/KyleGospo/gasket-dkms/commit/54a3c9f8a941c16483bbee99a83001d17e175863.patch
 Patch5:         https://github.com/KyleGospo/gasket-dkms/commit/448f4373dd801d4ff68f1579ff2ec68d03be03e0.patch
 Patch6:         https://github.com/KyleGospo/gasket-dkms/commit/56597d14586ceebe479d43d71a462710bb4bd1ba.patch
+
+# Local correctness fixes found while auditing the archived Google driver.
+Patch7:         0001-apex-fix-reset-error-handling-and-probe-delay.patch
+Patch8:         0002-gasket-make-device-slot-allocation-race-free.patch
+Patch9:         0003-gasket-propagate-pci-and-dma-setup-errors.patch
 
 ExclusiveArch:  x86_64
 
@@ -101,7 +106,7 @@ kmodtool \
     %{?kernels:--for-kernels "%{?kernels}"} \
     2>/dev/null
 
-# Extract official Google source and apply Patch0..Patch6.
+# Extract official Google source and apply compatibility and local fixes.
 %autosetup -n gasket-driver-%{commit} -p1
 
 # Google source uses #VERSION# in MODULE_VERSION().
@@ -188,6 +193,12 @@ fi
 
 
 %changelog
+* Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 1.0.18.git20240425.5815ee3-4
+- Check apex_reset() failures during PCI probe
+- Use a real millisecond sleep between Apex readiness retries
+- Make Gasket device-slot allocation race-free for concurrent probes
+- Check DMA mask setup and preserve original PCI setup errors
+
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 1.0.18.git20240425.5815ee3-3
 - Replace direct groupadd with declarative systemd-sysusers configuration
 - Install the apex group definition through gasket-kmod-common
