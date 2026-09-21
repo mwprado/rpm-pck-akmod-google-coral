@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# System group used by the upstream Apex udev rule for /dev/apex_N.
+g apex - - -
