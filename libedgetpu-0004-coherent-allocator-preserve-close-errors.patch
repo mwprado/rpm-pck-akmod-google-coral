@@ -1,0 +1,40 @@
+From: Moacyr Prado <mwprado@github>
+Subject: [PATCH 4/4] coherent allocator: preserve close errors and release fd
+
+KernelCoherentAllocator::DoClose() stores an error returned by Unmap(), but
+returns a fresh OK status when the allocator-disable ioctl succeeds. This hides
+the unmap failure.
+
+If the disable ioctl itself fails, the function also returns before closing its
+device fd. CoherentAllocator::Close() clears its state regardless of the
+returned status, so that descriptor cannot be retried through the object and is
+effectively leaked.
+
+Preserve the accumulated status and always release the file descriptor.
+
+---
+ driver/kernel/kernel_coherent_allocator.cc | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/driver/kernel/kernel_coherent_allocator.cc b/driver/kernel/kernel_coherent_allocator.cc
+--- a/driver/kernel/kernel_coherent_allocator.cc
++++ b/driver/kernel/kernel_coherent_allocator.cc
+@@ -83,17 +83,18 @@ Status KernelCoherentAllocator::DoClose(char *mem_base, size_t size_bytes) {
+   ioctl_buffer.size = size_bytes;
+   if (ioctl(fd_, GASKET_IOCTL_CONFIG_COHERENT_ALLOCATOR, &ioctl_buffer) != 0) {
+     status.Update(FailedPreconditionError(StringPrintf(
+         "Could not disable coherent allocator size %" PRIu64 ". : %d (%s)",
+         ioctl_buffer.size, fd_, strerror(errno))));
+-    return status;
+   }
+ 
+   close(fd_);
+   fd_ = INVALID_FD_VALUE;
+   dma_address_ = 0;
+-  return Status();  // OK
++  return status;
+ }
+ 
+ }  // namespace driver
+ }  // namespace darwinn
+ }  // namespace platforms
