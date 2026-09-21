@@ -1,0 +1,50 @@
+From: Moacyr Prado <mwprado@github>
+Subject: [PATCH 2/3] libedgetpu: clean up partial register mappings on open failure
+
+KernelRegisters::Open() can map several PCI BAR regions. If a later mmap()
+fails, the code closes the fd but leaves all earlier mappings active and their
+pointers stored in mmap_region_. Since fd_ is then marked invalid, the base
+destructor will not call Close() and those mappings survive until process
+teardown.
+
+Unmap already-created regions before closing the descriptor. Also fix the
+inverted status check in UnmapAllRegions(), which currently logs successful
+unmaps as errors, and correct the Read32 alignment diagnostic.
+
+---
+ driver/kernel/kernel_registers.cc | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/driver/kernel/kernel_registers.cc b/driver/kernel/kernel_registers.cc
+--- a/driver/kernel/kernel_registers.cc
++++ b/driver/kernel/kernel_registers.cc
+@@ -51,7 +51,7 @@ void KernelRegisters::UnmapAllRegions() {
+   for (auto& region : mmap_region_) {
+     if (region.registers != nullptr) {
+       status = UnmapRegion(fd_, region);
+-      if (status.ok()) {
++      if (!status.ok()) {
+         LOG(ERROR) << status;
+       }
+       region.registers = nullptr;
+@@ -85,9 +85,12 @@ Status KernelRegisters::Open() {
+ 
+     auto statusor = MapRegion(fd_, region, read_only_);
+     if (!statusor.ok()) {
++      Status map_status = statusor.status();
++      UnmapAllRegions();
+       close(fd_);
+       fd_ = INVALID_FD_VALUE;
+-      return statusor.status();
++      return map_status;
+     }
+     region.registers = std::move(statusor.ValueOrDie());
+     VLOG(3) << "Got map addr at 0x" << std::hex << region.registers;
+@@ -181,7 +184,7 @@ StatusOr<uint32> KernelRegisters::Read32(uint64 offset) {
+   }
+   if (offset % sizeof(uint32) != 0) {
+     return FailedPreconditionError(StringPrintf(
+-        "Offset (0x%016llx) not aligned to 8B",
++        "Offset (0x%016llx) not aligned to 4B",
+         static_cast<unsigned long long>(offset)));  // NOLINT(runtime/int)
+   }
