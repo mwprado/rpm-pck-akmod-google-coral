@@ -8,7 +8,7 @@
 
 Name:           libedgetpu
 Version:        16.0
-Release:        4.tf%{tf_version}.git%{shortcommit}%{?dist}
+Release:        5.tf%{tf_version}.git%{shortcommit}%{?dist}
 Summary:        PCIe userspace runtime library for Google Coral Edge TPU
 
 License:        Apache-2.0
@@ -165,7 +165,9 @@ make %{?_smp_mflags} \
         -Wl,--soname,libedgetpu.so.1 \
         -Wl,--version-script=${PWD}/tflite/public/libedgetpu.lds \
         -fuse-ld=gold \
+        -Wl,--whole-archive \
         ${FLATBUFFERS_BUILD}/libflatbuffers.a \
+        -Wl,--no-whole-archive \
         ${ABSL_LIBS}" \
     libedgetpu-throttled
 
@@ -197,6 +199,15 @@ readelf -d %{buildroot}%{_libdir}/libedgetpu.so.1.0 | \
 nm -D %{buildroot}%{_libdir}/libedgetpu.so.1.0 | \
     grep -q 'edgetpu_list_devices'
 
+# Catch unresolved runtime symbols that a normal shared-library link permits.
+# This specifically prevents static archive ordering mistakes (such as
+# FlatBuffers ClassicLocale) from producing an RPM that builds but cannot be
+# dlopen()'d.
+python3 - <<'PY'
+import ctypes
+ctypes.CDLL(r"%{buildroot}%{_libdir}/libedgetpu.so.1.0")
+PY
+
 
 %files
 %license LICENSE
@@ -212,6 +223,11 @@ nm -D %{buildroot}%{_libdir}/libedgetpu.so.1.0 | \
 
 
 %changelog
+* Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-5.tf2.16.1.gite35aed1
+- Force inclusion of the private FlatBuffers static archive at link time
+- Fix unresolved flatbuffers::ClassicLocale runtime symbol
+- Add dlopen smoke test to catch unresolved symbols during COPR build
+
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 16.0-4.tf2.16.1.gite35aed1
 - Build privately against TensorFlow-pinned FlatBuffers 23.5.26
 - Avoid Fedora 44 FlatBuffers 25 header incompatibility
