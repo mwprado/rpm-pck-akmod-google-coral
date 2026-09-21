@@ -1,0 +1,81 @@
+From: Moacyr Prado <mwprado@github>
+Subject: [PATCH 2/3] gasket: make device slot allocation race-free
+
+gasket_find_dev_slot() searched for a free slot while holding
+internal_desc->mutex but released the mutex before gasket_alloc_dev() stored
+the new device pointer in that slot.
+
+Two concurrent probes could therefore select the same free slot and overwrite
+one another in internal_desc->devs[].
+
+Reserve the slot while still holding internal_desc->mutex. Allocate and
+initialize the object before reserving it, and free it if reservation fails.
+
+---
+ src/gasket_core.c | 28 +++++++++++++++++-----------
+ 1 file changed, 17 insertions(+), 11 deletions(-)
+
+diff --git a/src/gasket_core.c b/src/gasket_core.c
+--- a/src/gasket_core.c
++++ b/src/gasket_core.c
+@@ -149,9 +149,10 @@ static int gasket_owned_by_current_tgid(struct gasket_cdev_info *info)
+ }
+ 
+ /*
+- * Find the next free gasket_internal_dev slot.
++ * Find and reserve the next free gasket_internal_dev slot.
+  *
+  * Returns the located slot number on success or a negative number on failure.
+  */
+-static int gasket_find_dev_slot(struct gasket_internal_desc *internal_desc,
+-				const char *kobj_name)
++static int gasket_reserve_dev_slot(struct gasket_internal_desc *internal_desc,
++				   const char *kobj_name,
++				   struct gasket_dev *gasket_dev)
+ {
+ 	int i;
+ 
+@@ -180,6 +181,9 @@ static int gasket_find_dev_slot(struct gasket_internal_desc *internal_desc,
+ 		return -EBUSY;
+ 	}
+ 
++	/* Reserve the slot before dropping the lock. */
++	internal_desc->devs[i] = gasket_dev;
++
+ 	mutex_unlock(&internal_desc->mutex);
+ 	return i;
+ }
+@@ -202,24 +206,26 @@ static int gasket_alloc_dev(struct gasket_internal_desc *internal_desc,
+ 
+ 	*pdev = NULL;
+ 
+-	dev_idx = gasket_find_dev_slot(internal_desc, parent_name);
+-	if (dev_idx < 0)
+-		return dev_idx;
+-
+-	gasket_dev = *pdev = kzalloc(sizeof(*gasket_dev), GFP_KERNEL);
++	gasket_dev = kzalloc(sizeof(*gasket_dev), GFP_KERNEL);
+ 	if (!gasket_dev) {
+ 		pr_err("no memory for device, parent %s\n", parent_name);
+ 		return -ENOMEM;
+ 	}
+-	internal_desc->devs[dev_idx] = gasket_dev;
+ 
+ 	mutex_init(&gasket_dev->mutex);
+ 
+ 	gasket_dev->internal_desc = internal_desc;
+-	gasket_dev->dev_idx = dev_idx;
+ 	snprintf(gasket_dev->kobj_name, GASKET_NAME_MAX, "%s", parent_name);
++
++	dev_idx = gasket_reserve_dev_slot(internal_desc, parent_name,
++					  gasket_dev);
++	if (dev_idx < 0) {
++		kfree(gasket_dev);
++		return dev_idx;
++	}
++
++	gasket_dev->dev_idx = dev_idx;
++	*pdev = gasket_dev;
+ 	gasket_dev->dev = get_device(parent);
+ 	gasket_dev->dma_dev = get_device(parent);
+ 	/* gasket_bar_data is uninitialized. */
