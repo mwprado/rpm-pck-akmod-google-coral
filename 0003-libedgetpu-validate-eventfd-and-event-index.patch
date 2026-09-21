@@ -1,5 +1,5 @@
 From: Moacyr Prado <mwprado@github>
-Subject: [PATCH 3/3] libedgetpu: validate eventfd initialization and event index
+Subject: [PATCH 3/5] libedgetpu: validate eventfd initialization and event index
 
 KernelEventHandler::Open() treated eventfd creation failures as success and
 could leave a partially initialized handler containing invalid descriptors.
