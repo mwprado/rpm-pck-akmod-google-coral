@@ -7,7 +7,9 @@ descriptor until process exit.
 
 DoMap() also compares ioctl()'s return value against -EPERM, -ENOTTY and
 -EINVAL. Linux ioctl() returns -1 and reports the actual error through errno,
-so the intended fallback to GASKET_IOCTL_MAP_BUFFER is never reached.
+so the intended fallback to GASKET_IOCTL_MAP_BUFFER is never reached. Only
+EINVAL/ENOTTY indicate an unavailable ioctl here; EPERM is a real Gasket
+permission/state failure and must not be hidden by a legacy retry.
 
 Close the device on partition failure and test errno when deciding whether the
 flags ioctl is unsupported.
@@ -41,7 +43,7 @@ diff --git a/driver/kernel/kernel_mmu_mapper.cc b/driver/kernel/kernel_mmu_mappe
 -      VLOG(4) << StringPrintf("Failed to map buffer with flags, error %d",
 -                              ioctl_retval);
 +    if (ioctl_retval != 0 &&
-+        (errno == EPERM || errno == ENOTTY || errno == EINVAL)) {
++        (errno == ENOTTY || errno == EINVAL)) {
 +      VLOG(4) << StringPrintf(
 +          "Failed to map buffer with flags, errno %d (%s)", errno,
 +          strerror(errno));
