@@ -215,16 +215,36 @@ quatro correções locais de lógica encontradas no código upstream arquivado:
   do intervalo antes de indexar os vetores internos;
 - `libedgetpu-0004-coherent-allocator-preserve-close-errors.patch` — preserva
   erros de `munmap()` no fechamento do coherent allocator e garante o
-  fechamento do file descriptor mesmo quando o ioctl de desativação falha.
+  fechamento do file descriptor mesmo quando o ioctl de desativação falha;
+- `libedgetpu-0005-kernel-events-clear-kernel-eventfd-bindings.patch` — envia
+  `GASKET_IOCTL_CLEAR_EVENTFD` antes de fechar cada `eventfd`, liberando a
+  referência `eventfd_ctx` mantida pelo driver de kernel entre ciclos de uso.
 
 Esses patches atuam no caminho PCIe/M.2 usado neste repositório e foram
 verificados contra o commit `e35aed18fea2e2d25d98352e5a5bd357c170bd4d`.
+
+A revisão crítica também refinou o fallback do ioctl de mapeamento: `EPERM`
+não é tratado como sinal de kernel antigo. No Gasket ele representa falha de
+permissão/estado; somente `EINVAL`/`ENOTTY` acionam a tentativa com o ioctl
+legado.
+
+O `%check` valida ainda o SONAME, os símbolos C e do plugin LiteRT, executa
+`dlopen()` e chama `edgetpu_list_devices()`/`edgetpu_version()` sem exigir
+hardware presente no builder.
 
 A auditoria também revisou o encerramento do delegate. O segmentation fault
 observado anteriormente apenas quando Python/LiteRT encerrava automaticamente
 não pôde ser atribuído de forma objetiva ao `libedgetpu`: a destruição
 explícita do `Interpreter` antes do delegate encerra corretamente. Por isso
 nenhum patch especulativo de lifecycle foi aplicado ao runtime.
+
+Há, porém, um ponto de teardown ainda classificado como **risco não corrigido**:
+`MmioDriver::DoClose()` muda seu estado para `kClosing` e ainda possui
+retornos antecipados em falhas de clock gating ou `PauseAllDmas()`. Isso pode
+interromper a sequência de limpeza. Corrigir esse fluxo exige distinguir
+operações de hardware que deixam de ser seguras após uma falha das limpezas
+puramente host-side; por isso não foi aplicado um patch sem teste de
+fault-injection em hardware real.
 
 ### Correções locais do libedgetpu
 
