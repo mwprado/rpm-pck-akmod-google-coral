@@ -18,7 +18,7 @@
 
 Name:           %{kmod_name}-kmod
 Version:        1.0.18.git20240425.%{shortcommit}
-Release:        4%{?dist}
+Release:        5%{?dist}
 Summary:        Google Coral Gasket and Apex kernel modules
 
 License:        GPL-2.0-only
@@ -76,7 +76,7 @@ compatibility fixes required for current Fedora kernels.
 
 # kmodtool-generated akmod packages require:
 #
-#   gasket-kmod-common >= %{version}
+#   gasket-kmod-common >= matching package version
 #
 # Provide that package in this same SRPM so the akmod is self-contained
 # and does not depend on a second COPR build.
@@ -193,6 +193,11 @@ fi
 
 
 %changelog
+* Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 1.0.18.git20240425.5815ee3-5
+- Fix malformed unified-diff metadata in the device-slot race patch
+- Revalidate local Gasket patch hunk counts before akmod build
+- Avoid RPM macro expansion in a documentation comment
+
 * Mon Sep 21 2026 Moacyr Prado <mwprado@github> - 1.0.18.git20240425.5815ee3-4
 - Check apex_reset() failures during PCI probe
 - Use a real millisecond sleep between Apex readiness retries
